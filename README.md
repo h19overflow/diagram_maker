@@ -1,0 +1,571 @@
+# Diagram Maker - Production-Ready AWS Deployment
+
+A production-ready application demonstrating **deployable code architecture** with comprehensive AWS infrastructure considerations. This project emphasizes infrastructure as code, deployment patterns, and cloud-native design principles over AI capabilities.
+
+## Core Philosophy
+
+**The main idea of this project is not the AI—it's about building deployable code with deployment to AWS considerations.** Every component is designed with production deployment, scalability, and maintainability in mind.
+
+## Architecture & Infrastructure
+
+### High-Level Infrastructure
+
+The system follows a cloud-native architecture designed for AWS deployment:
+
+- **Edge Layer**: CloudFront CDN and API Gateway for request routing
+- **Application Layer**: EC2-based services with RAG and agentic capabilities
+- **Data Layer**: S3 buckets for frontend hosting and knowledge base storage
+- **Database**: RDS (PostgreSQL/MySQL) for application data
+- **Knowledge Access**: Amazon Bedrock Knowledge Bases for vector search
+
+#### High-Level Architecture Diagram
+
+```mermaid
+flowchart TB
+%%============================================================
+%% Final Functional Architecture — 2 Buckets
+
+User[Web / Mobile Client]
+
+subgraph Edge["Edge & API"]
+  CF["Amazon CloudFront (CDN)"]
+  APIGW["Amazon API Gateway (HTTP/WebSocket)"]
+end
+
+subgraph App["Application Layer"]
+  EC2["Amazon EC2 (App Service: RAG + Agents)"]
+  Router["Model Router (in-app)"]
+  Retriever["Retrieval Service (in-app)"]
+end
+
+subgraph Retrieval["Knowledge Access"]
+  KB["Amazon Bedrock Knowledge Bases\n(Vector store managed by KB)"]
+end
+
+subgraph Data["Data & Storage"]
+  S3FE["Amazon S3 — Frontend (static site)"]
+  S3KB["Amazon S3 — KB Docs (single bucket)\n/prefixes: uploads/ • corpus/ • archive/"]
+  RDS["Amazon RDS (PostgreSQL/MySQL)"]
+end
+
+%% Request path
+User --> CF --> APIGW --> EC2
+CF --> S3FE
+
+%% App internals
+EC2 --> Router --> LLM["Amazon Bedrock (LLMs)"]
+EC2 --> Retriever --> KB
+
+%% RDS
+EC2 <--> RDS
+
+%% Reads via Knowledge Base
+KB --> EC2
+S3KB -->|Data source| KB
+
+%% Writes to S3 (2-bucket setup)
+User -->|Upload request| APIGW --> EC2 -->|presigned PUT to uploads/| S3KB
+S3KB -->|promote uploads/ → corpus/| S3KB
+S3KB -->|optional lifecycle → archive/| S3KB
+```
+
+#### Detailed Serverless Architecture
+
+```mermaid
+flowchart TB
+%%============================================================
+%% Serverless AI/ML Architecture — Project Agnostic (Revised)
+
+%% Core Application
+subgraph CORE["Core Application"]
+    app["Application Service<br/>(RAG + Agents)"]
+    app_note["Note:<br/>• Hybrid Retrieval (BM25 + Vector)<br/>• Embeddings (Transformer-based)<br/>• SSE/WebSocket aware<br/>• Multi-tenant context (tenantId)"]:::note
+    guard["Policy / Guardrails<br/>(Prompt templating, PII redaction,<br/>allowlists, rate limiting, cost caps)"]
+    router["Model Router<br/>(Primary/FM fallback, budget & latency guards)"]
+    cache_ans["Answer Cache<br/>(short TTL, FAQ hits)"]
+    flags["Feature Flags / Config<br/>(Prompt & retrieval knobs)"]
+end
+
+%% Edge & API
+subgraph EDGE["Edge & API Layer"]
+    cloudfront["Edge CDN / Reverse Proxy"]
+    waf["Web Application Firewall"]
+    apigw["API Gateway (HTTP + WebSocket)"]
+    lambda["Serverless Functions<br/>(REST + WS handlers)"]
+end
+
+%% AI / Retrieval / Data
+subgraph DATA["AI / Retrieval / Data Layer"]
+    llm["LLM Service<br/>(Foundation Model API)"]
+    s3_docs["Object Storage – Docs<br/>(PDFs + metadata)"]
+    s3_frontend["Object Storage – Frontend<br/>(Static assets)"]
+    searchdb["Search / Vector Index<br/>(Hybrid BM25 + kNN)"]
+    cache_ret["Retrieval Cache<br/>(query→top-k chunks, short TTL)"]
+end
+
+%% Ingestion Workflow
+subgraph INGEST["Ingestion & Processing Workflow"]
+    eventbridge["Event Bus"]
+    sfn["Workflow Orchestrator"]
+    av["AV Scan / Filetype Sniff"]
+    pii["PII/PHI Scrubber"]
+    schemax["Schema Extractor<br/>(title/author/date/ACL)"]
+    ocr["OCR / Parsing Worker"]
+    chunk["Chunking Worker"]
+    embed["Embedding Worker"]
+    sync["Index Sync Jobs<br/>(create/update/delete)"]
+    dlq["Dead Letter Queue"]
+end
+
+%% Security / Identity
+subgraph SECURITY["Security, Identity, and Secrets"]
+    auth["Auth Service<br/>(User Pool / JWT)"]
+    iam["Role / Policy Manager"]
+    kms["Encryption Service<br/>(KMS)"]
+    secrets["Secrets Manager"]
+end
+
+%% Networking
+subgraph VPC["Private Network"]
+    vpce_s3["VPC Endpoint: Storage"]
+    vpce_search["VPC Endpoint: Search / Vector"]
+end
+
+%% Observability
+subgraph OBS["Observability & Analytics"]
+    cw["Metrics & Logs"]
+    xray["Tracing"]
+    cost["Cost Telemetry<br/>(per request / tenant)"]
+    evals["Offline Eval Harness<br/>(golden sets, shadow)"]
+end
+
+%%============================================================
+%% Relationships — User ↔ Edge ↔ API (request down, response up)
+%%============================================================
+User(["User"])
+User --> cloudfront
+cloudfront --> waf
+waf --> apigw
+apigw --> lambda
+lambda --> app
+app --> guard
+guard --> router
+router --> llm
+searchdb --> app
+s3_docs --> app
+cache_ret --> app
+cache_ans --> app
+app --> cache_ans
+app --> cache_ret
+app --> cost
+app --> cw
+app --> xray
+
+%% Static frontend
+cloudfront --> s3_frontend
+
+%% AuthN/Z
+User --> auth
+apigw --> auth
+
+%% Streaming options
+apigw -. WebSocket/SSE .- User
+
+%%============================================================
+%% Presigned Uploads (secure path)
+%%============================================================
+User -->|Upload request| apigw
+apigw --> lambda
+lambda -->|Generate presigned PUT| s3_docs
+User -->|PUT via presigned URL| s3_docs
+
+%%============================================================
+%% Ingestion (decoupled)
+%%============================================================
+s3_docs --> eventbridge
+eventbridge --> sfn
+sfn --> av --> pii --> schemax --> ocr --> chunk --> embed --> sync
+embed --> searchdb
+sync --> searchdb
+sfn --> s3_docs
+sfn --> dlq
+
+%%============================================================
+%% Security / Identity / Secrets / Networking
+%%============================================================
+iam --> lambda
+iam --> app
+iam --> searchdb
+iam --> s3_docs
+secrets --> app
+kms --> s3_docs
+kms --> searchdb
+app --> vpce_s3
+app --> vpce_search
+searchdb --> vpce_search
+s3_docs --> vpce_s3
+
+%%============================================================
+%% Observability
+%%============================================================
+cloudfront --> cw
+apigw --> cw
+lambda --> cw
+llm --> cw
+sfn --> cw
+av --> cw
+pii --> cw
+schemax --> cw
+ocr --> cw
+chunk --> cw
+embed --> cw
+searchdb --> cw
+
+cloudfront --> xray
+apigw --> xray
+lambda --> xray
+router --> xray
+
+cost --> cw
+evals --> cw
+
+%%============================================================
+%% Notes
+%%============================================================
+search_note["Note:<br/>• Query-time hybrid fusion<br/>• Separate text & vector collections<br/>• Private endpoint access"]:::note
+s3_note["Note:<br/>• Documents + metadata JSON<br/>• Short-TTL presigned URLs<br/>• Tenant-scoped prefixes"]:::note
+lambda_note["Note:<br/>• Slim image, lazy init<br/>• Concurrency tuning<br/>• Cold start mitigation"]:::note
+
+searchdb --- search_note
+s3_docs --- s3_note
+lambda --- lambda_note
+app --- app_note
+flags --- app
+
+%%============================================================
+%% Styles
+%%============================================================
+classDef note fill:#f9f9f9,stroke:#bbb,stroke-width:1px,font-size:11px;
+```
+
+See detailed architecture diagrams:
+- [`Docs/arch_mmd/highlevel_infra.mmd`](Docs/arch_mmd/highlevel_infra.mmd) - High-level infrastructure overview
+- [`Docs/arch_mmd/infra_architecture.mmd`](Docs/arch_mmd/infra_architecture.mmd) - Detailed serverless architecture
+
+### Infrastructure as Code
+
+All AWS resources are defined using **Terraform modules** following best practices:
+
+- **Modular Design**: Reusable Terraform modules for each infrastructure component
+- **Environment-Aware**: Supports multiple environments (dev, staging, prod) via variables
+- **Resource Configuration**: Each AWS resource properly configured with versioning, encryption, lifecycle rules, and access controls
+
+**Terraform Workflow Documentation**: [`Docs/terraform_mmd/terraform_workflow.md`](Docs/terraform_mmd/terraform_workflow.md)
+
+The workflow follows a structured approach:
+1. **Define Variables** - Avoid hardcoding, enable reusability
+2. **Resource Configuration** - Each AWS resource requires separate configuration resources
+3. **Module Outputs** - Expose important values for cross-module references
+4. **Root Module Usage** - Instantiate modules with environment-specific values
+5. **Root Outputs** - Centralized view of all infrastructure outputs
+
+#### Terraform Module Structure
+
+```mermaid
+graph TB
+    subgraph Root["Root Terraform Directory (terraform/)"]
+        RootMain["main.tf - Calls modules"]
+        RootVars["variables.tf - Root-level variables"]
+        RootOutputs["outputs.tf - Re-exposes module outputs"]
+        RootProvider["provider.tf - AWS provider config"]
+    end
+    
+    subgraph Module["Module Directory (modules/s3_frontend/)"]
+        ModuleVars["variables.tf - Module input variables"]
+        ModuleMain["main.tf - Resource definitions"]
+        ModuleOutputs["outputs.tf - Module outputs"]
+    end
+    
+    subgraph AWS["AWS Cloud"]
+        S3Bucket[S3 Bucket]
+        S3Versioning[Versioning Config]
+        S3Encryption[Encryption Config]
+        S3PublicAccess[Public Access Block]
+        S3Website[Website Config]
+    end
+    
+    RootMain -->|Calls module| ModuleVars
+    RootMain -->|Passes values| ModuleVars
+    RootVars -->|Provides| RootMain
+    
+    ModuleVars -->|Used in| ModuleMain
+    ModuleMain -->|Creates| S3Bucket
+    ModuleMain -->|Creates| S3Versioning
+    ModuleMain -->|Creates| S3Encryption
+    ModuleMain -->|Creates| S3PublicAccess
+    ModuleMain -->|Creates| S3Website
+    
+    S3Bucket -->|Referenced by| S3Versioning
+    S3Bucket -->|Referenced by| S3Encryption
+    S3Bucket -->|Referenced by| S3PublicAccess
+    S3Bucket -->|Referenced by| S3Website
+    
+    ModuleMain -->|Values from| ModuleOutputs
+    ModuleOutputs -->|Exposes| RootMain
+    RootMain -->|References| RootOutputs
+    RootOutputs -->|Final outputs| User["User/Other Modules"]
+    
+    style Root fill:#1565C0
+    style Module fill:#E65100
+    style AWS fill:#1B5E20
+    style RootMain fill:#0D47A1
+    style RootVars fill:#1976D2
+    style RootOutputs fill:#880E4F
+    style RootProvider fill:#1976D2
+    style ModuleVars fill:#BF360C
+    style ModuleMain fill:#D84315
+    style ModuleOutputs fill:#2E7D32
+    style S3Bucket fill:#0D4A0D
+    style S3Versioning fill:#1B5E20
+    style S3Encryption fill:#2E7D32
+    style S3PublicAccess fill:#388E3C
+    style S3Website fill:#43A047
+    style User fill:#4A148C
+```
+
+#### Terraform Workflow Sequence
+
+```mermaid
+%%{init: {'theme':'base', 'themeVariables': { 'primaryColor':'#4A148C', 'primaryTextColor':'#fff', 'primaryBorderColor':'#7B1FA2', 'lineColor':'#1976D2', 'secondaryColor':'#1565C0', 'tertiaryColor':'#E65100'}}}%%
+sequenceDiagram
+    participant User
+    participant RootMain as Root main.tf
+    participant RootVars as Root variables.tf
+    participant ModuleVars as Module variables.tf
+    participant ModuleMain as Module main.tf
+    participant AWS as AWS Provider
+    participant ModuleOutputs as Module outputs.tf
+    participant RootOutputs as Root outputs.tf
+    
+    rect rgb(25, 118, 210)
+        Note over User,RootOutputs: Step 1: Define Variables (Avoid Hardcoding)
+    end
+
+    User->>RootVars: Define root-level variables<br/>(environment, resource_prefix)
+    User->>ModuleVars: Define module variables<br/>(bucket_name, index_document, etc.)
+    
+    rect rgb(230, 81, 0)
+        Note over User,RootOutputs: Step 2: Create Resources (Each Has Own Config)
+    end
+    User->>ModuleMain: Create main resource<br/>(aws_s3_bucket)
+    User->>ModuleMain: Create config resource 1<br/>(aws_s3_bucket_versioning)
+    User->>ModuleMain: Create config resource 2<br/>(aws_s3_bucket_encryption)
+    User->>ModuleMain: Create config resource 3<br/>(aws_s3_bucket_public_access_block)
+    User->>ModuleMain: Create config resource 4<br/>(aws_s3_bucket_website_configuration)
+    Note over ModuleMain: Each resource references<br/>the main bucket via .id
+    
+    rect rgb(46, 125, 50)
+        Note over User,RootOutputs: Step 3: Define Module Outputs
+    end
+    User->>ModuleOutputs: Define module-level outputs<br/>(bucket_id, bucket_arn, etc.)
+    ModuleOutputs->>ModuleMain: References module resources<br/>(aws_s3_bucket.static_site.id)
+    
+    rect rgb(156, 39, 176)
+        Note over User,RootOutputs: Step 4: Use Module in Root main.tf
+    end
+    User->>RootMain: Call module "s3_frontend"
+    RootMain->>RootVars: Read var.environment
+    RootMain->>ModuleVars: Pass variables to module<br/>(bucket_name, environment, etc.)
+    RootMain->>ModuleMain: Execute module resources
+    ModuleMain->>AWS: Create S3 bucket
+    ModuleMain->>AWS: Configure versioning
+    ModuleMain->>AWS: Configure encryption
+    ModuleMain->>AWS: Configure public access
+    ModuleMain->>AWS: Configure website hosting
+    AWS-->>ModuleMain: Resources created
+    ModuleMain->>ModuleOutputs: Generate outputs
+    ModuleOutputs-->>RootMain: Return outputs<br/>(bucket_id, bucket_arn, etc.)
+    
+    rect rgb(194, 24, 91)
+        Note over User,RootOutputs: Step 5: Re-expose in Root Outputs
+    end
+    User->>RootOutputs: Define root-level outputs
+    RootOutputs->>RootMain: Reference module outputs<br/>(module.s3_frontend.bucket_id)
+    RootOutputs->>RootMain: Reference module outputs<br/>(module.s3_frontend.website_endpoint)
+    RootMain-->>RootOutputs: Provide module output values
+    RootOutputs-->>User: Final outputs available<br/>(frontend_bucket_id, etc.)
+
+    rect rgb(13, 71, 161)
+        Note over User,RootOutputs: Terraform Execution Flow
+    end
+    User->>RootMain: terraform plan/apply
+    RootMain->>ModuleVars: Validate input variables
+    RootMain->>ModuleMain: Plan resource creation
+    ModuleMain->>AWS: Calculate resource dependencies
+    AWS-->>ModuleMain: Dependency graph
+    ModuleMain->>AWS: Create resources in order
+    AWS-->>ModuleMain: Resources created
+    ModuleMain->>ModuleOutputs: Calculate outputs
+    ModuleOutputs-->>RootMain: Module outputs ready
+    RootMain->>RootOutputs: Calculate root outputs
+    RootOutputs-->>User: All outputs available
+```
+
+**Module Structure**: [`Docs/terraform_mmd/terraform_module_structure.mmd`](Docs/terraform_mmd/terraform_module_structure.mmd)
+
+### S3 Bucket Architecture
+
+The project implements a **two-bucket strategy**:
+
+- **Frontend Bucket**: Static website hosting with CloudFront integration
+- **Knowledge Base Bucket**: Document storage with prefix-based organization:
+  - `uploads/` - Initial document uploads
+  - `corpus/` - Processed documents ready for indexing
+  - `archive/` - Lifecycle-managed archived documents
+
+Both buckets include:
+- Server-side encryption (SSE)
+- Versioning
+- Lifecycle policies
+- Proper IAM access controls
+
+## Code Architecture Patterns
+
+### Singleton Pattern for Vector Store
+
+The vector store implementation uses a **singleton pattern with lazy initialization** to balance global access with testability:
+
+**Documentation**: [`Docs/vector_store_singleton_pattern.md`](Docs/vector_store_singleton_pattern.md)
+
+Key benefits:
+- Single instance ensures consistency across the application
+- Lazy initialization reduces startup overhead
+- Testable through explicit reset functions
+- Flexible for custom configurations when needed
+
+```python
+from src.core.pipeline.vector_store import vector_store
+
+# Direct usage - singleton instance
+results = await vector_store.search("query", k=10)
+```
+
+## Project Structure
+
+```
+diagram_maker/
+├── terraform/              # Infrastructure as Code
+│   ├── modules/           # Reusable Terraform modules
+│   │   ├── s3_frontend/  # Frontend hosting module
+│   │   ├── s3_kb/        # Knowledge base storage module
+│   │   └── ...
+│   ├── main.tf           # Root module definitions
+│   └── variables.tf      # Environment variables
+├── src/                   # Application code
+│   ├── api/              # FastAPI endpoints
+│   ├── boundary/         # Data access layer
+│   ├── core/             # Business logic
+│   ├── services/         # Service layer
+│   └── configs/          # Configuration management
+├── Docs/                  # Architecture and deployment documentation
+│   ├── arch_mmd/         # Architecture diagrams
+│   ├── terraform_mmd/    # Terraform workflow diagrams
+│   └── vector_store_singleton_pattern.md
+└── tests/                 # Comprehensive test suite
+```
+
+## Deployment Considerations
+
+### Environment Configuration
+
+- **Multi-Environment Support**: Terraform variables enable deployment to dev, staging, and production
+- **Configuration Management**: Centralized configs with environment-specific overrides
+- **Secrets Management**: AWS Secrets Manager integration ready
+
+### Scalability
+
+- **Stateless Application Design**: Enables horizontal scaling
+- **S3 Lifecycle Policies**: Automatic archival and expiration
+- **Database Connection Pooling**: Optimized for concurrent requests
+- **CDN Integration**: CloudFront for global content delivery
+
+### Security
+
+- **IAM Roles**: Least-privilege access patterns
+- **Encryption**: At-rest and in-transit encryption
+- **VPC Endpoints**: Private network access to AWS services
+- **WAF Integration**: Web application firewall ready
+
+### Observability
+
+- **CloudWatch Integration**: Metrics and logging
+- **X-Ray Tracing**: Distributed tracing support
+- **Health Checks**: Application and infrastructure monitoring
+
+## Getting Started
+
+### Prerequisites
+
+- Python 3.12+
+- Terraform >= 1.0
+- AWS CLI configured
+- AWS account with appropriate permissions
+
+### Local Development
+
+```bash
+# Install dependencies
+uv sync
+
+# Run application
+python main.py
+
+# Run tests
+pytest
+```
+
+### Infrastructure Deployment
+
+```bash
+cd terraform
+
+# Initialize Terraform
+terraform init
+
+# Plan deployment
+terraform plan -var="environment=dev"
+
+# Apply infrastructure
+terraform apply -var="environment=dev"
+
+# View outputs
+terraform output
+```
+
+## Testing Strategy
+
+- **Unit Tests**: Core business logic and utilities
+- **Integration Tests**: Service integration and data pipeline
+- **E2E Tests**: API endpoint validation
+- **Benchmark Tests**: Performance and load testing
+
+## Documentation
+
+All deployment and architecture documentation is located in the [`Docs/`](Docs/) directory:
+
+- **Architecture Diagrams**: Mermaid diagrams for infrastructure design
+- **Terraform Workflows**: Step-by-step module creation and usage
+- **Code Patterns**: Design patterns and best practices
+
+## Key Design Principles
+
+1. **Infrastructure as Code First**: All AWS resources defined in Terraform
+2. **Modularity**: Reusable, composable modules
+3. **Environment Parity**: Same code, different configurations
+4. **Testability**: Code designed for easy testing and mocking
+5. **Observability**: Built-in logging, metrics, and tracing
+6. **Security by Default**: Encryption, IAM, and access controls
+7. **Scalability**: Stateless design and horizontal scaling support
+
+
+# diagram_maker

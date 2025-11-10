@@ -10,3 +10,11 @@ wheels/
 .venv
 .env
 data/
+
+# Terraform
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+terraform.tfstate
+terraform.tfstate.backup
