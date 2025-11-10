@@ -1,0 +1,174 @@
+flowchart TB
+%%============================================================
+%% Serverless AI/ML Architecture — Project Agnostic (Revised)
+
+%% Core Application
+subgraph CORE["Core Application"]
+    app["Application Service<br/>(RAG + Agents)"]
+    app_note["Note:<br/>• Hybrid Retrieval (BM25 + Vector)<br/>• Embeddings (Transformer-based)<br/>• SSE/WebSocket aware<br/>• Multi-tenant context (tenantId)"]:::note
+    guard["Policy / Guardrails<br/>(Prompt templating, PII redaction,<br/>allowlists, rate limiting, cost caps)"]
+    router["Model Router<br/>(Primary/FM fallback, budget & latency guards)"]
+    cache_ans["Answer Cache<br/>(short TTL, FAQ hits)"]
+    flags["Feature Flags / Config<br/>(Prompt & retrieval knobs)"]
+end
+
+%% Edge & API
+subgraph EDGE["Edge & API Layer"]
+    cloudfront["Edge CDN / Reverse Proxy"]
+    waf["Web Application Firewall"]
+    apigw["API Gateway (HTTP + WebSocket)"]
+    lambda["Serverless Functions<br/>(REST + WS handlers)"]
+end
+
+%% AI / Retrieval / Data
+subgraph DATA["AI / Retrieval / Data Layer"]
+    llm["LLM Service<br/>(Foundation Model API)"]
+    s3_docs["Object Storage – Docs<br/>(PDFs + metadata)"]
+    s3_frontend["Object Storage – Frontend<br/>(Static assets)"]
+    searchdb["Search / Vector Index<br/>(Hybrid BM25 + kNN)"]
+    cache_ret["Retrieval Cache<br/>(query→top-k chunks, short TTL)"]
+end
+
+%% Ingestion Workflow
+subgraph INGEST["Ingestion & Processing Workflow"]
+    eventbridge["Event Bus"]
+    sfn["Workflow Orchestrator"]
+    av["AV Scan / Filetype Sniff"]
+    pii["PII/PHI Scrubber"]
+    schemax["Schema Extractor<br/>(title/author/date/ACL)"]
+    ocr["OCR / Parsing Worker"]
+    chunk["Chunking Worker"]
+    embed["Embedding Worker"]
+    sync["Index Sync Jobs<br/>(create/update/delete)"]
+    dlq["Dead Letter Queue"]
+end
+
+%% Security / Identity
+subgraph SECURITY["Security, Identity, and Secrets"]
+    auth["Auth Service<br/>(User Pool / JWT)"]
+    iam["Role / Policy Manager"]
+    kms["Encryption Service<br/>(KMS)"]
+    secrets["Secrets Manager"]
+end
+
+%% Networking
+subgraph VPC["Private Network"]
+    vpce_s3["VPC Endpoint: Storage"]
+    vpce_search["VPC Endpoint: Search / Vector"]
+end
+
+%% Observability
+subgraph OBS["Observability & Analytics"]
+    cw["Metrics & Logs"]
+    xray["Tracing"]
+    cost["Cost Telemetry<br/>(per request / tenant)"]
+    evals["Offline Eval Harness<br/>(golden sets, shadow)"]
+end
+
+%%============================================================
+%% Relationships — User ↔ Edge ↔ API (request down, response up)
+%%============================================================
+User(["User"])
+User --> cloudfront
+cloudfront --> waf
+waf --> apigw
+apigw --> lambda
+lambda --> app
+app --> guard
+guard --> router
+router --> llm
+searchdb --> app
+s3_docs --> app
+cache_ret --> app
+cache_ans --> app
+app --> cache_ans
+app --> cache_ret
+app --> cost
+app --> cw
+app --> xray
+
+%% Static frontend
+cloudfront --> s3_frontend
+
+%% AuthN/Z
+User --> auth
+apigw --> auth
+
+%% Streaming options
+apigw -. WebSocket/SSE .- User
+
+%%============================================================
+%% Presigned Uploads (secure path)
+%%============================================================
+User -->|Upload request| apigw
+apigw --> lambda
+lambda -->|Generate presigned PUT| s3_docs
+User -->|PUT via presigned URL| s3_docs
+
+%%============================================================
+%% Ingestion (decoupled)
+%%============================================================
+s3_docs --> eventbridge
+eventbridge --> sfn
+sfn --> av --> pii --> schemax --> ocr --> chunk --> embed --> sync
+embed --> searchdb
+sync --> searchdb
+sfn --> s3_docs
+sfn --> dlq
+
+%%============================================================
+%% Security / Identity / Secrets / Networking
+%%============================================================
+iam --> lambda
+iam --> app
+iam --> searchdb
+iam --> s3_docs
+secrets --> app
+kms --> s3_docs
+kms --> searchdb
+app --> vpce_s3
+app --> vpce_search
+searchdb --> vpce_search
+s3_docs --> vpce_s3
+
+%%============================================================
+%% Observability
+%%============================================================
+cloudfront --> cw
+apigw --> cw
+lambda --> cw
+llm --> cw
+sfn --> cw
+av --> cw
+pii --> cw
+schemax --> cw
+ocr --> cw
+chunk --> cw
+embed --> cw
+searchdb --> cw
+
+cloudfront --> xray
+apigw --> xray
+lambda --> xray
+router --> xray
+
+cost --> cw
+evals --> cw
+
+%%============================================================
+%% Notes
+%%============================================================
+search_note["Note:<br/>• Query-time hybrid fusion<br/>• Separate text & vector collections<br/>• Private endpoint access"]:::note
+s3_note["Note:<br/>• Documents + metadata JSON<br/>• Short-TTL presigned URLs<br/>• Tenant-scoped prefixes"]:::note
+lambda_note["Note:<br/>• Slim image, lazy init<br/>• Concurrency tuning<br/>• Cold start mitigation"]:::note
+
+searchdb --- search_note
+s3_docs --- s3_note
+lambda --- lambda_note
+app --- app_note
+flags --- app
+
+%%============================================================
+%% Styles
+%%============================================================
+classDef note fill:#f9f9f9,stroke:#bbb,stroke-width:1px,font-size:11px;

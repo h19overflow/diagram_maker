@@ -1,0 +1,74 @@
+%%{init: {'theme':'base', 'themeVariables': { 'primaryColor':'#4A148C', 'primaryTextColor':'#fff', 'primaryBorderColor':'#7B1FA2', 'lineColor':'#1976D2', 'secondaryColor':'#1565C0', 'tertiaryColor':'#E65100'}}}%%
+sequenceDiagram
+    participant User
+    participant RootMain as Root main.tf
+    participant RootVars as Root variables.tf
+    participant ModuleVars as Module variables.tf
+    participant ModuleMain as Module main.tf
+    participant AWS as AWS Provider
+    participant ModuleOutputs as Module outputs.tf
+    participant RootOutputs as Root outputs.tf
+    
+    rect rgb(25, 118, 210)
+        Note over User,RootOutputs: Step 1: Define Variables (Avoid Hardcoding)
+    end
+
+    User->>RootVars: Define root-level variables<br/>(environment, resource_prefix)
+    User->>ModuleVars: Define module variables<br/>(bucket_name, index_document, etc.)
+    
+    rect rgb(230, 81, 0)
+        Note over User,RootOutputs: Step 2: Create Resources (Each Has Own Config)
+    end
+    User->>ModuleMain: Create main resource<br/>(aws_s3_bucket)
+    User->>ModuleMain: Create config resource 1<br/>(aws_s3_bucket_versioning)
+    User->>ModuleMain: Create config resource 2<br/>(aws_s3_bucket_encryption)
+    User->>ModuleMain: Create config resource 3<br/>(aws_s3_bucket_public_access_block)
+    User->>ModuleMain: Create config resource 4<br/>(aws_s3_bucket_website_configuration)
+    Note over ModuleMain: Each resource references<br/>the main bucket via .id
+    
+    rect rgb(46, 125, 50)
+        Note over User,RootOutputs: Step 3: Define Module Outputs
+    end
+    User->>ModuleOutputs: Define module-level outputs<br/>(bucket_id, bucket_arn, etc.)
+    ModuleOutputs->>ModuleMain: References module resources<br/>(aws_s3_bucket.static_site.id)
+    
+    rect rgb(156, 39, 176)
+        Note over User,RootOutputs: Step 4: Use Module in Root main.tf
+    end
+    User->>RootMain: Call module "s3_frontend"
+    RootMain->>RootVars: Read var.environment
+    RootMain->>ModuleVars: Pass variables to module<br/>(bucket_name, environment, etc.)
+    RootMain->>ModuleMain: Execute module resources
+    ModuleMain->>AWS: Create S3 bucket
+    ModuleMain->>AWS: Configure versioning
+    ModuleMain->>AWS: Configure encryption
+    ModuleMain->>AWS: Configure public access
+    ModuleMain->>AWS: Configure website hosting
+    AWS-->>ModuleMain: Resources created
+    ModuleMain->>ModuleOutputs: Generate outputs
+    ModuleOutputs-->>RootMain: Return outputs<br/>(bucket_id, bucket_arn, etc.)
+    
+    rect rgb(194, 24, 91)
+        Note over User,RootOutputs: Step 5: Re-expose in Root Outputs
+    end
+    User->>RootOutputs: Define root-level outputs
+    RootOutputs->>RootMain: Reference module outputs<br/>(module.s3_frontend.bucket_id)
+    RootOutputs->>RootMain: Reference module outputs<br/>(module.s3_frontend.website_endpoint)
+    RootMain-->>RootOutputs: Provide module output values
+    RootOutputs-->>User: Final outputs available<br/>(frontend_bucket_id, etc.)
+
+    rect rgb(13, 71, 161)
+        Note over User,RootOutputs: Terraform Execution Flow
+    end
+    User->>RootMain: terraform plan/apply
+    RootMain->>ModuleVars: Validate input variables
+    RootMain->>ModuleMain: Plan resource creation
+    ModuleMain->>AWS: Calculate resource dependencies
+    AWS-->>ModuleMain: Dependency graph
+    ModuleMain->>AWS: Create resources in order
+    AWS-->>ModuleMain: Resources created
+    ModuleMain->>ModuleOutputs: Calculate outputs
+    ModuleOutputs-->>RootMain: Module outputs ready
+    RootMain->>RootOutputs: Calculate root outputs
+    RootOutputs-->>User: All outputs available
+

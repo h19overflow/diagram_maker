@@ -1,0 +1,60 @@
+graph TB
+    subgraph Root["Root Terraform Directory (terraform/)"]
+        RootMain["main.tf - Calls modules"]
+        RootVars["variables.tf - Root-level variables"]
+        RootOutputs["outputs.tf - Re-exposes module outputs"]
+        RootProvider["provider.tf - AWS provider config"]
+    end
+    
+    subgraph Module["Module Directory (modules/s3_frontend/)"]
+        ModuleVars["variables.tf - Module input variables"]
+        ModuleMain["main.tf - Resource definitions"]
+        ModuleOutputs["outputs.tf - Module outputs"]
+    end
+    
+    subgraph AWS["AWS Cloud"]
+        S3Bucket[S3 Bucket]
+        S3Versioning[Versioning Config]
+        S3Encryption[Encryption Config]
+        S3PublicAccess[Public Access Block]
+        S3Website[Website Config]
+    end
+    
+    RootMain -->|Calls module| ModuleVars
+    RootMain -->|Passes values| ModuleVars
+    RootVars -->|Provides| RootMain
+    
+    ModuleVars -->|Used in| ModuleMain
+    ModuleMain -->|Creates| S3Bucket
+    ModuleMain -->|Creates| S3Versioning
+    ModuleMain -->|Creates| S3Encryption
+    ModuleMain -->|Creates| S3PublicAccess
+    ModuleMain -->|Creates| S3Website
+    
+    S3Bucket -->|Referenced by| S3Versioning
+    S3Bucket -->|Referenced by| S3Encryption
+    S3Bucket -->|Referenced by| S3PublicAccess
+    S3Bucket -->|Referenced by| S3Website
+    
+    ModuleMain -->|Values from| ModuleOutputs
+    ModuleOutputs -->|Exposes| RootMain
+    RootMain -->|References| RootOutputs
+    RootOutputs -->|Final outputs| User["User/Other Modules"]
+    
+    style Root fill:#1565C0
+    style Module fill:#E65100
+    style AWS fill:#1B5E20
+    style RootMain fill:#0D47A1
+    style RootVars fill:#1976D2
+    style RootOutputs fill:#880E4F
+    style RootProvider fill:#1976D2
+    style ModuleVars fill:#BF360C
+    style ModuleMain fill:#D84315
+    style ModuleOutputs fill:#2E7D32
+    style S3Bucket fill:#0D4A0D
+    style S3Versioning fill:#1B5E20
+    style S3Encryption fill:#2E7D32
+    style S3PublicAccess fill:#388E3C
+    style S3Website fill:#43A047
+    style User fill:#4A148C
+

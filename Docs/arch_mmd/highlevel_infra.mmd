@@ -1,0 +1,46 @@
+flowchart TB
+%%============================================================
+%% Final Functional Architecture — 2 Buckets
+
+User[Web / Mobile Client]
+
+subgraph Edge["Edge & API"]
+  CF["Amazon CloudFront (CDN)"]
+  APIGW["Amazon API Gateway (HTTP/WebSocket)"]
+end
+
+subgraph App["Application Layer"]
+  EC2["Amazon EC2 (App Service: RAG + Agents)"]
+  Router["Model Router (in-app)"]
+  Retriever["Retrieval Service (in-app)"]
+end
+
+subgraph Retrieval["Knowledge Access"]
+  KB["Amazon Bedrock Knowledge Bases\n(Vector store managed by KB)"]
+end
+
+subgraph Data["Data & Storage"]
+  S3FE["Amazon S3 — Frontend (static site)"]
+  S3KB["Amazon S3 — KB Docs (single bucket)\n/prefixes: uploads/ • corpus/ • archive/"]
+  RDS["Amazon RDS (PostgreSQL/MySQL)"]
+end
+
+%% Request path
+User --> CF --> APIGW --> EC2
+CF --> S3FE
+
+%% App internals
+EC2 --> Router --> LLM["Amazon Bedrock (LLMs)"]
+EC2 --> Retriever --> KB
+
+%% RDS
+EC2 <--> RDS
+
+%% Reads via Knowledge Base
+KB --> EC2
+S3KB -->|Data source| KB
+
+%% Writes to S3 (2-bucket setup)
+User -->|Upload request| APIGW --> EC2 -->|presigned PUT to uploads/| S3KB
+S3KB -->|promote uploads/ → corpus/| S3KB
+S3KB -->|optional lifecycle → archive/| S3KB
