@@ -142,7 +142,7 @@ flowchart TB
     Helper -->|Parallel Description Gen| HelperAgent[Helper Agent<br/>Amazon Bedrock Nova Pro]
     HelperAgent -->|HelperResponse| Helper
 
-    Helper -->|IRSDiagramResponse| EndSuccess([Final Diagram])
+    Helper -->|IRSDiagramResponse + Mermaid| EndSuccess([Final Diagram])
 
     style Start fill:#4CAF50
     style EndSuccess fill:#4CAF50
@@ -165,6 +165,7 @@ flowchart LR
         DiagramSkeleton[diagram_skeleton: NodeTitles]
         ContextDocs["context_docs: Dict(str, List(Document))"]
         FinalDiagram[final_diagram: IRSDiagramResponse]
+        MermaidDiagram[mermaid_diagram: str]
         ErrorMsg[error_message: str]
     end
 
@@ -190,6 +191,7 @@ flowchart LR
         BuildNodes[Build Nodes Object<br/>id, title, hierarchy, description]
         BuildEdges[Build Edges Object<br/>from parent & children]
         BuildDiagram[Build IRSDiagramResponse]
+        MermaidParser[Parse to Mermaid<br/>Flowchart Syntax]
     end
 
     UserInput --> Node1
@@ -220,7 +222,9 @@ flowchart LR
     DiagramSkeleton --> BuildEdges
     BuildNodes --> BuildDiagram
     BuildEdges --> BuildDiagram
+    BuildDiagram --> MermaidParser
     BuildDiagram --> FinalDiagram
+    MermaidParser --> MermaidDiagram
 
     style GraphState fill:#E3F2FD
     style Node1 fill:#BBDEFB
@@ -395,9 +399,10 @@ flowchart TD
 - **Helper Agent Integration**: Calls helper agent for each node with its context documents
 - **Diagram Construction**: Builds `Nodes`, `Edges`, and `IRSDiagramResponse` objects
 - **Edge Building**: Creates edges from both `parent_node_id` and `children_node_ids` relationships
+- **Automatic Mermaid Generation**: Automatically converts `IRSDiagramResponse` to Mermaid flowchart syntax
 
 **Input**: `diagram_skeleton: NodeTitles`, `context_docs: Dict[str, List[Document]]`, `user_input: str`
-**Output**: `final_diagram: IRSDiagramResponse` or `error_message: str`
+**Output**: `final_diagram: IRSDiagramResponse`, `mermaid_diagram: str`, or `error_message: str`
 
 ```mermaid
 flowchart TD
@@ -440,6 +445,7 @@ classDiagram
         +Optional[NodeTitles] diagram_skeleton
         +Optional[Dict[str, List[Document]]] context_docs
         +Optional[IRSDiagramResponse] final_diagram
+        +Optional[str] mermaid_diagram
         +Optional[str] error_message
     }
 
@@ -513,6 +519,48 @@ flowchart TD
     style Helper fill:#9C27B0
 ```
 
+### Mermaid Parsing Module
+
+The system includes an automatic Mermaid diagram generation module that converts structured diagram data into Mermaid flowchart syntax for visualization.
+
+#### Module Location
+`src/core/agentic_system/nodes/mermaid_parsing/`
+
+#### Key Features
+
+1. **Hierarchy Visualization**: Different node shapes based on hierarchy level:
+   - **Level 0 (Root)**: Rectangles `[text]`
+   - **Level 1**: Rounded rectangles `(text)`
+   - **Level 2**: Stadium shapes `([text])`
+   - **Level 3+**: Cylinders `[(text)]`
+
+2. **Node Label Formatting**: 
+   - Node titles and descriptions are combined in the node box
+   - Descriptions are included using `<br/>` separator
+   - Special characters are escaped for Mermaid compatibility
+   - Node IDs are sanitized to be Mermaid-safe
+
+3. **Automatic Integration**: 
+   - Mermaid parsing is automatically called after `final_diagram` is created
+   - The Mermaid syntax is stored in `GraphState.mermaid_diagram`
+   - Errors are handled gracefully (logs warning if parsing fails)
+
+#### Module Structure
+
+- **`flowchart_parser.py`**: Main parsing function `parse_to_flowchart()` that converts `IRSDiagramResponse` to Mermaid syntax
+- **`node_formatter.py`**: Utilities for sanitizing node IDs and formatting labels
+- **`hierarchy_builder.py`**: Functions for grouping nodes by hierarchy level and building relationships
+
+#### Usage
+
+```python
+from src.core.agentic_system.nodes.mermaid_parsing import parse_to_flowchart
+
+# Automatically called in helper_populating_node
+mermaid_diagram = parse_to_flowchart(final_diagram)
+# Returns: "flowchart TD\n    Node1[Title<br/>Description] --> Node2(...)"
+```
+
 ### Key Implementation Details
 
 1. **State Management**: LangGraph outputs dictionaries even when initialized with Pydantic BaseModel. All nodes handle both dict and object access patterns.
@@ -526,6 +574,8 @@ flowchart TD
 4. **Agent Response Extraction**: Both orchestrator and helper agents extract `structured_response` from the agent's dictionary output (which contains both `messages` and `structured_response`).
 
 5. **Similarity Score Normalization**: FAISS distance scores are normalized to 0-1 similarity range using `1.0 / (1.0 + distance)`.
+
+6. **Mermaid Diagram Generation**: The `helper_populating_node` automatically generates Mermaid flowchart syntax from `IRSDiagramResponse`, using different node shapes based on hierarchy levels and including descriptions in node labels.
 
 ## Project Structure
 
@@ -542,6 +592,9 @@ diagram_maker/
 │   ├── api/              # FastAPI endpoints
 │   ├── boundary/         # Data access layer
 │   ├── core/             # Business logic
+│   │   └── agentic_system/
+│   │       └── nodes/
+│   │           └── mermaid_parsing/  # Mermaid diagram generation
 │   ├── services/         # Service layer
 │   └── configs/          # Configuration management
 ├── Docs/                  # Architecture and deployment documentation
