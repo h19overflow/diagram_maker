@@ -400,9 +400,10 @@ flowchart TD
 - **Diagram Construction**: Builds `Nodes`, `Edges`, and `IRSDiagramResponse` objects
 - **Edge Building**: Creates edges from both `parent_node_id` and `children_node_ids` relationships
 - **Automatic Mermaid Generation**: Automatically converts `IRSDiagramResponse` to Mermaid flowchart syntax
+- **Automatic File Saving**: Saves Mermaid diagrams to `.mmd` files in the `Docs/` directory
 
 **Input**: `diagram_skeleton: NodeTitles`, `context_docs: Dict[str, List[Document]]`, `user_input: str`
-**Output**: `final_diagram: IRSDiagramResponse`, `mermaid_diagram: str`, or `error_message: str`
+**Output**: `final_diagram: IRSDiagramResponse`, `mermaid_diagram: str`, `mermaid_filepath: str`, or `error_message: str`
 
 ```mermaid
 flowchart TD
@@ -428,7 +429,9 @@ flowchart TD
 
     BuildNodes --> BuildDiagram[Build IRSDiagramResponse<br/>diagram_type, title, nodes, edges]
     BuildEdges --> BuildDiagram
-    BuildDiagram --> Output[Return final_diagram]
+    BuildDiagram --> MermaidGen[Generate Mermaid Syntax<br/>parse_to_flowchart]
+    MermaidGen --> SaveFile[Save to .mmd File<br/>save_mermaid_to_file]
+    SaveFile --> Output[Return final_diagram<br/>mermaid_diagram, mermaid_filepath]
 
     style Input1 fill:#9C27B0
     style Input2 fill:#9C27B0
@@ -446,6 +449,7 @@ classDiagram
         +Optional[Dict[str, List[Document]]] context_docs
         +Optional[IRSDiagramResponse] final_diagram
         +Optional[str] mermaid_diagram
+        +Optional[str] mermaid_filepath
         +Optional[str] error_message
     }
 
@@ -537,29 +541,52 @@ The system includes an automatic Mermaid diagram generation module that converts
 2. **Node Label Formatting**: 
    - Node titles and descriptions are combined in the node box
    - Descriptions are included using `<br/>` separator
-   - Special characters are escaped for Mermaid compatibility
+   - Special characters (parentheses, brackets, etc.) are automatically escaped
+   - Labels with special characters are wrapped in quotes for Mermaid compatibility
    - Node IDs are sanitized to be Mermaid-safe
 
-3. **Automatic Integration**: 
+3. **Automatic File Saving**:
+   - Mermaid diagrams are automatically saved to `.mmd` files in the `Docs/` directory
+   - Filenames are generated from diagram titles (sanitized) or timestamps
+   - File path is stored in `GraphState.mermaid_filepath` for reference
+
+4. **Automatic Integration**:
    - Mermaid parsing is automatically called after `final_diagram` is created
    - The Mermaid syntax is stored in `GraphState.mermaid_diagram`
-   - Errors are handled gracefully (logs warning if parsing fails)
+   - Files are automatically saved after successful parsing
+   - Errors are handled gracefully (logs warning if parsing or saving fails)
 
 #### Module Structure
 
-- **`flowchart_parser.py`**: Main parsing function `parse_to_flowchart()` that converts `IRSDiagramResponse` to Mermaid syntax
-- **`node_formatter.py`**: Utilities for sanitizing node IDs and formatting labels
+- **`flowchart_parser.py`**:
+  - Main parsing function `parse_to_flowchart()` that converts `IRSDiagramResponse` to Mermaid syntax
+  - `save_mermaid_to_file()` function that saves Mermaid code to `.mmd` files
+- **`node_formatter.py`**:
+  - Utilities for sanitizing node IDs and formatting labels
+  - `escape_mermaid_text()` for escaping special characters
+  - `needs_quotes()` for detecting labels that require quoting
+  - `format_node_label()` returns formatted label and quote requirement flag
 - **`hierarchy_builder.py`**: Functions for grouping nodes by hierarchy level and building relationships
 
 #### Usage
 
 ```python
-from src.core.agentic_system.nodes.mermaid_parsing import parse_to_flowchart
+from src.core.agentic_system.nodes.mermaid_parsing import parse_to_flowchart, save_mermaid_to_file
 
 # Automatically called in helper_populating_node
 mermaid_diagram = parse_to_flowchart(final_diagram)
 # Returns: "flowchart TD\n    Node1[Title<br/>Description] --> Node2(...)"
+
+# Save to file (also automatically called in helper_populating_node)
+filepath = save_mermaid_to_file(mermaid_diagram, diagram_title="My Diagram")
+# Saves to: Docs/My_Diagram.mmd
+# Returns: "Docs/My_Diagram.mmd"
 ```
+
+**Automatic Workflow**: The `helper_populating_node` automatically:
+1. Generates Mermaid syntax from `IRSDiagramResponse`
+2. Saves the diagram to a `.mmd` file in the `Docs/` directory
+3. Stores both the Mermaid syntax and file path in `GraphState`
 
 ### Key Implementation Details
 
@@ -575,7 +602,9 @@ mermaid_diagram = parse_to_flowchart(final_diagram)
 
 5. **Similarity Score Normalization**: FAISS distance scores are normalized to 0-1 similarity range using `1.0 / (1.0 + distance)`.
 
-6. **Mermaid Diagram Generation**: The `helper_populating_node` automatically generates Mermaid flowchart syntax from `IRSDiagramResponse`, using different node shapes based on hierarchy levels and including descriptions in node labels.
+6. **Mermaid Diagram Generation**: The `helper_populating_node` automatically generates Mermaid flowchart syntax from `IRSDiagramResponse`, using different node shapes based on hierarchy levels and including descriptions in node labels. The diagram is automatically saved to a `.mmd` file in the `Docs/` directory with the file path stored in `GraphState.mermaid_filepath`.
+
+7. **Special Character Handling**: Labels containing parentheses, brackets, or other special characters are automatically wrapped in quotes to prevent Mermaid parsing errors. This ensures valid syntax even when node titles or descriptions contain characters like `(NF4)`, `[text]`, etc.
 
 ## Project Structure
 
