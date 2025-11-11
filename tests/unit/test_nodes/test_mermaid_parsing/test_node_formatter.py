@@ -5,7 +5,7 @@ Unit tests for node_formatter module.
 from src.core.agentic_system.nodes.mermaid_parsing.node_formatter import (
     sanitize_node_id,
     escape_mermaid_text,
-    format_node_label
+    format_node_label,
 )
 
 
@@ -158,4 +158,3 @@ class TestFormatNodeLabel:
         """Test that labels with brackets need quotes."""
         label, needs_quotes = format_node_label("Node [Title]")
         assert needs_quotes is True
-

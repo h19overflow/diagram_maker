@@ -17,3 +17,8 @@ module "s3_kb" {
   expire_archive_after_days = 365
 }
 
+module "ecr" {
+  source = "./modules/ecr"
+  environment = var.environment
+  resource_prefix = var.resource_prefix
+}

@@ -4,7 +4,10 @@ Unit tests for retrieval_node.
 
 import pytest
 from unittest.mock import patch
-from src.core.agentic_system.nodes.retrieval_node import retrieval_node, retrieval_node_sync
+from src.core.agentic_system.nodes.retrieval_node import (
+    retrieval_node,
+    retrieval_node_sync,
+)
 from src.core.agentic_system.graph_state import GraphState
 from src.core.agentic_system.respone_formats import NodeTitles, HierarchicalNodeTitle
 from langchain_core.documents import Document
@@ -20,15 +23,15 @@ def sample_diagram_skeleton():
                 title="What is QLoRA?",
                 hierarchy_level=0,
                 parent_node_id=None,
-                children_node_ids=["node_002"]
+                children_node_ids=["node_002"],
             ),
             HierarchicalNodeTitle(
                 node_id="node_002",
                 title="How does fine-tuning work?",
                 hierarchy_level=1,
                 parent_node_id="node_001",
-                children_node_ids=[]
-            )
+                children_node_ids=[],
+            ),
         ]
     )
 
@@ -37,31 +40,36 @@ def sample_diagram_skeleton():
 def sample_documents():
     """Create sample documents for testing."""
     return [
-        Document(page_content="QLoRA is a quantization technique", metadata={"source": "qlora.pdf"}),
-        Document(page_content="Fine-tuning adapts models", metadata={"source": "finetuning.pdf"})
+        Document(
+            page_content="QLoRA is a quantization technique",
+            metadata={"source": "qlora.pdf"},
+        ),
+        Document(
+            page_content="Fine-tuning adapts models",
+            metadata={"source": "finetuning.pdf"},
+        ),
     ]
 
 
 @pytest.fixture
 def sample_state(sample_diagram_skeleton):
     """Create a sample GraphState for testing."""
-    return GraphState(
-        user_input="Test query",
-        diagram_skeleton=sample_diagram_skeleton
-    )
+    return GraphState(user_input="Test query", diagram_skeleton=sample_diagram_skeleton)
 
 
 class TestRetrievalNode:
     """Test cases for retrieval_node."""
 
     @pytest.mark.asyncio
-    @patch('src.core.agentic_system.nodes.retrieval_node.search_for_node')
-    async def test_successful_retrieval(self, mock_search, sample_state, sample_documents):
+    @patch("src.core.agentic_system.nodes.retrieval_node.search_for_node")
+    async def test_successful_retrieval(
+        self, mock_search, sample_state, sample_documents
+    ):
         """Test successful document retrieval for all nodes."""
         # Setup mocks
         mock_search.side_effect = [
             ("What is QLoRA?", sample_documents),
-            ("How does fine-tuning work?", sample_documents)
+            ("How does fine-tuning work?", sample_documents),
         ]
 
         # Execute
@@ -76,7 +84,7 @@ class TestRetrievalNode:
         assert mock_search.call_count == 2
 
     @pytest.mark.asyncio
-    @patch('src.core.agentic_system.nodes.retrieval_node.search_for_node')
+    @patch("src.core.agentic_system.nodes.retrieval_node.search_for_node")
     async def test_empty_diagram_skeleton(self, mock_search):
         """Test handling of empty diagram skeleton."""
         # Setup
@@ -91,7 +99,7 @@ class TestRetrievalNode:
         mock_search.assert_not_called()
 
     @pytest.mark.asyncio
-    @patch('src.core.agentic_system.nodes.retrieval_node.search_for_node')
+    @patch("src.core.agentic_system.nodes.retrieval_node.search_for_node")
     async def test_dict_skeleton_conversion(self, mock_search, sample_documents):
         """Test that dict skeleton is converted to NodeTitles."""
         # Setup
@@ -102,7 +110,7 @@ class TestRetrievalNode:
                     "title": "Test title",
                     "hierarchy_level": 0,
                     "parent_node_id": None,
-                    "children_node_ids": []
+                    "children_node_ids": [],
                 }
             ]
         }
@@ -118,14 +126,13 @@ class TestRetrievalNode:
         mock_search.assert_called_once()
 
     @pytest.mark.asyncio
-    @patch('src.core.agentic_system.nodes.retrieval_node.search_for_node')
-    async def test_dict_state_access(self, mock_search, sample_documents, sample_diagram_skeleton):
+    @patch("src.core.agentic_system.nodes.retrieval_node.search_for_node")
+    async def test_dict_state_access(
+        self, mock_search, sample_documents, sample_diagram_skeleton
+    ):
         """Test that node handles dict state correctly."""
         # Setup
-        state_dict = {
-            "user_input": "Test",
-            "diagram_skeleton": sample_diagram_skeleton
-        }
+        state_dict = {"user_input": "Test", "diagram_skeleton": sample_diagram_skeleton}
         mock_search.return_value = ("What is QLoRA?", sample_documents)
 
         # Execute
@@ -135,15 +142,18 @@ class TestRetrievalNode:
         assert "context_docs" in result
 
     @pytest.mark.asyncio
-    @patch('src.core.agentic_system.nodes.retrieval_node.search_for_node')
-    async def test_parallel_retrieval(self, mock_search, sample_state, sample_documents):
+    @patch("src.core.agentic_system.nodes.retrieval_node.search_for_node")
+    async def test_parallel_retrieval(
+        self, mock_search, sample_state, sample_documents
+    ):
         """Test that searches are executed in parallel."""
         # Setup
         call_order = []
+
         async def track_calls(*args, **kwargs):
             call_order.append(len(call_order))
             return ("Test", sample_documents)
-        
+
         mock_search.side_effect = track_calls
 
         # Execute
@@ -155,7 +165,7 @@ class TestRetrievalNode:
         assert "context_docs" in result  # Ensure result is used
 
     @pytest.mark.asyncio
-    @patch('src.core.agentic_system.nodes.retrieval_node.search_for_node')
+    @patch("src.core.agentic_system.nodes.retrieval_node.search_for_node")
     async def test_exception_handling(self, mock_search, sample_state):
         """Test that exceptions are caught and returned as error messages."""
         # Setup
@@ -170,10 +180,12 @@ class TestRetrievalNode:
 
     def test_retrieval_node_sync(self, sample_state, sample_documents):
         """Test the synchronous wrapper function."""
-        with patch('src.core.agentic_system.nodes.retrieval_node.search_for_node') as mock_search:
+        with patch(
+            "src.core.agentic_system.nodes.retrieval_node.search_for_node"
+        ) as mock_search:
             mock_search.side_effect = [
                 ("What is QLoRA?", sample_documents),
-                ("How does fine-tuning work?", sample_documents)
+                ("How does fine-tuning work?", sample_documents),
             ]
 
             # Execute
@@ -185,7 +197,9 @@ class TestRetrievalNode:
 
     def test_retrieval_node_sync_exception(self, sample_state):
         """Test sync wrapper handles exceptions."""
-        with patch('src.core.agentic_system.nodes.retrieval_node.search_for_node') as mock_search:
+        with patch(
+            "src.core.agentic_system.nodes.retrieval_node.search_for_node"
+        ) as mock_search:
             mock_search.side_effect = Exception("Test error")
 
             # Execute
@@ -195,4 +209,3 @@ class TestRetrievalNode:
             assert "error_message" in result
             assert "Error in retrieval node" in result["error_message"]
             assert result is not None  # Ensure result is used
-
