@@ -90,9 +90,18 @@ def parse_to_flowchart(diagram: IRSDiagramResponse) -> str:
     grouped_nodes = group_nodes_by_level(nodes_obj)
     
     # Create mapping of original node IDs to sanitized IDs
+    # Handle potential duplicates by appending index if needed
     node_id_map: dict[str, str] = {}
+    sanitized_to_count: dict[str, int] = {}
     for node_id in nodes_obj.id:
-        node_id_map[node_id] = sanitize_node_id(node_id)
+        sanitized = sanitize_node_id(node_id)
+        # If we've seen this sanitized ID before, append a counter
+        if sanitized in sanitized_to_count:
+            sanitized_to_count[sanitized] += 1
+            sanitized = f"{sanitized}_{sanitized_to_count[sanitized]}"
+        else:
+            sanitized_to_count[sanitized] = 0
+        node_id_map[node_id] = sanitized
     
     # Build Mermaid flowchart
     lines = ["flowchart TD"]
@@ -110,21 +119,25 @@ def parse_to_flowchart(diagram: IRSDiagramResponse) -> str:
     
     # Add edges
     if edges_obj and edges_obj.source and len(edges_obj.source) > 0:
-        for i, source_id in enumerate(edges_obj.source):
-            target_id = edges_obj.target[i]
-            
-            # Get sanitized IDs
-            sanitized_source = node_id_map.get(source_id)
-            sanitized_target = node_id_map.get(target_id)
-            
-            # Skip if either node is missing from the map
-            if not sanitized_source or not sanitized_target:
-                logger.warning(f"Skipping edge: {source_id} -> {target_id} (node not found)")
-                continue
-            
-            # Add edge: Source --> Target
-            edge_line = f"    {sanitized_source} --> {sanitized_target}"
-            lines.append(edge_line)
+        # Validate that source and target lists have the same length
+        if not edges_obj.target or len(edges_obj.target) != len(edges_obj.source):
+            logger.warning(f"Edge source and target lists have mismatched lengths: {len(edges_obj.source)} sources vs {len(edges_obj.target) if edges_obj.target else 0} targets")
+        else:
+            for i, source_id in enumerate(edges_obj.source):
+                target_id = edges_obj.target[i]
+
+                # Get sanitized IDs
+                sanitized_source = node_id_map.get(source_id)
+                sanitized_target = node_id_map.get(target_id)
+
+                # Skip if either node is missing from the map
+                if not sanitized_source or not sanitized_target:
+                    logger.warning(f"Skipping edge: {source_id} -> {target_id} (node not found)")
+                    continue
+
+                # Add edge: Source --> Target
+                edge_line = f"    {sanitized_source} --> {sanitized_target}"
+                lines.append(edge_line)
     
     # Join all lines
     mermaid_code = "\n".join(lines)

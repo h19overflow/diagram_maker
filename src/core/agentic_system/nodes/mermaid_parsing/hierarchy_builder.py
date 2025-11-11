@@ -42,6 +42,10 @@ def group_nodes_by_level(nodes: Nodes) -> Dict[int, List[Tuple[str, str, Optiona
     hierarchy_levels = nodes.hierarchy_level
     descriptions = nodes.description if nodes.description else [None] * len(node_ids)
     
+    # Validate all lists have the same length
+    if not all(len(lst) == len(node_ids) for lst in [titles, hierarchy_levels]):
+        raise ValueError(f"Mismatched list lengths in Nodes object: ids={len(node_ids)}, titles={len(titles)}, levels={len(hierarchy_levels)}")
+    
     # Group nodes by hierarchy level
     for i, node_id in enumerate(node_ids):
         level = hierarchy_levels[i]
