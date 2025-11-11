@@ -28,8 +28,8 @@ ENV/
 htmlcov/
 .tox/
 
-# Environment files
-.env
+# Environment files (commented out to allow .env in container)
+# .env
 .env.local
 .env.*.local
 
