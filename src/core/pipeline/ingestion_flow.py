@@ -1,4 +1,3 @@
-from prefect import flow
 from src.core.pipeline.document_loader import load_document
 from src.core.pipeline.chunking import chunk_documents
 from src.core.pipeline.vector_store import get_vector_store
@@ -6,7 +5,7 @@ from logging import getLogger
 
 logger = getLogger(__name__)
 
-@flow(name="Ingestion Flow", description="Ingest documents into the vector store")
+
 def ingestion_flow(file_path: str, vector_store=None):
     """
     Ingest documents into the vector store.

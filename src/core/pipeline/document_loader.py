@@ -5,18 +5,11 @@ from typing import List
 
 from langchain_core.documents import Document
 from langchain_community.document_loaders import PyPDFLoader
-from prefect import task
 from logging import getLogger
 
 logger = getLogger(__name__)
 
 
-@task(
-    name="Load Document",
-    description="Load a PDF document using the langchain-community PyPDF loader",
-    retries=3,
-    retry_delay_seconds=10,
-)
 def load_document(
     file_path: str | Path, *, max_pages: int | None = None
 ) -> List[Document]:
@@ -51,12 +44,6 @@ def load_document(
 
 
 
-@task(
-    name="Save Documents",
-    description="Save a list of documents to a plain text file",
-    retries=3,
-    retry_delay_seconds=10,
-)
 def save_documents(documents: List[Document], output_file: str) -> Path:
     """Write the text content of each Document to a plain text file."""
     try:

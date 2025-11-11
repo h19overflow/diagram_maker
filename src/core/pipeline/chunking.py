@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Iterable, List, Sequence
+from typing import List
 
 from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from prefect import task
 from logging import getLogger
 
 from src.configs.rag_config import RAGConfig
@@ -27,12 +25,6 @@ def _build_text_splitter(options: RAGConfig) -> RecursiveCharacterTextSplitter:
     )
 
 
-@task(
-    name="Chunk Documents",
-    description="Split LangChain documents into retrieval-ready chunks with metadata",
-    retries=3,
-    retry_delay_seconds=10,
-)
 def chunk_documents(documents: List[Document]) -> List[Document]:
     """Takes in a list of documents and chunks them into retrieval-ready chunks with metadata."""
     try:

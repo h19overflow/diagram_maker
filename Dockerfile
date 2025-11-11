@@ -1,36 +1,56 @@
-# Use Python 3.12 slim image for smaller size
-FROM python:3.12-slim
+# Build stage - install dependencies with build tools
+FROM --platform=linux/amd64 python:3.12-slim AS builder
 
-# Set working directory
 WORKDIR /app
 
-# Install system dependencies if needed (for some Python packages)
+# Install build dependencies
 RUN apt-get update && apt-get install -y \
     build-essential \
-    curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Install uv using the official installer (faster than pip)
+# Install uv
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+
+# Copy dependency files
+COPY pyproject.toml ./
+COPY requirements.txt ./
+
+# Copy project code (needed for uv pip install .)
+COPY . .
+
+# Install Python dependencies using uv
+# Filter out Windows-only packages (like pywin32) for Linux container
+RUN uv pip install --system . && \
+    grep -v "^pywin32" requirements.txt | uv pip install --system -r /dev/stdin && \
+    # Clean up Python cache and unnecessary files to reduce image size
+    find /usr/local/lib/python3.12/site-packages -type d -name __pycache__ -exec rm -r {} + 2>/dev/null || true && \
+    find /usr/local/lib/python3.12/site-packages -type f -name "*.pyc" -delete && \
+    find /usr/local/lib/python3.12/site-packages -type f -name "*.pyo" -delete
+
+# Runtime stage - minimal image with only runtime dependencies
+FROM --platform=linux/amd64 python:3.12-slim
+
+WORKDIR /app
+
+# Install only runtime dependencies (curl for healthcheck)
+RUN apt-get update && apt-get install -y \
+    curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get purge -y --auto-remove -o APT::AutoRemove::RecommendsImportant=false
 
 # Create a non-root user for security (CKV_DOCKER_3 compliance)
 RUN useradd -m -u 1000 appuser && \
     chown -R appuser:appuser /app
 
-# Copy dependency files first for better Docker layer caching
-COPY --chown=appuser:appuser pyproject.toml ./
-COPY --chown=appuser:appuser requirements.txt ./
+# Copy installed packages from builder stage
+COPY --from=builder /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
+COPY --from=builder /usr/local/bin /usr/local/bin
+
+# Copy application code
+COPY --chown=appuser:appuser . .
 
 # Copy .env file if it exists (optional - can also pass env vars at runtime)
 COPY --chown=appuser:appuser .env* ./
-
-# Copy the entire project code (needed for uv pip install .)
-COPY --chown=appuser:appuser . .
-
-# Install Python dependencies using uv
-# First install from pyproject.toml, then from requirements.txt
-RUN uv pip install --system . && \
-    uv pip install --system -r requirements.txt
 
 # Switch to non-root user
 USER appuser

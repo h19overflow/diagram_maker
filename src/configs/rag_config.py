@@ -29,14 +29,16 @@ class RAGConfig(BaseSettings):
     BEDROCK_TEMPERATURE: float = Field(default=0.7)
     BEDROCK_MAX_TOKENS: int = Field(default=4096)
     
-    # ========== Embedding Model Configuration ==========
-    EMBEDDING_MODEL_NAME: str = Field(
-        default="intfloat/multilingual-e5-base",
-        description="Hugging Face E5 model for embeddings (supports Arabic)"
+    # ========== Embedding Model Configuration (AWS Bedrock) ==========
+    BEDROCK_EMBEDDING_MODEL_ID: str = Field(
+        default="amazon.titan-embed-text-v2:0",
+        description="AWS Bedrock embedding model ID (supports multilingual including Arabic)"
     )
-    EMBEDDING_DEVICE: str = Field(default="cpu", description="Device for embedding model (cpu/cuda)")
-    EMBEDDING_BATCH_SIZE: int = Field(default=32)
-    EMBEDDING_DIMENSION: int = Field(default=768, description="E5-base: 768, E5-large: 1024")
+    BEDROCK_REGION: str = Field(
+        default="ap-southeast-2",
+        description="AWS region for Bedrock service"
+    )
+    EMBEDDING_DIMENSION: int = Field(default=1024, description="Titan v2 embedding dimension: 1024")
     
     # ========== Text Chunking Configuration ==========
     CHUNK_SIZE: int = Field(default=1000, description="Chunk size in tokens (500-1000 recommended)")

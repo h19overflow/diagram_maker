@@ -1,8 +1,7 @@
 from langchain_community.vectorstores import FAISS
 from langchain_core.documents import Document
-from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_aws import BedrockEmbeddings
 from src.configs.rag_config import RAGConfig
-from prefect import task
 from typing import List, Optional
 from pathlib import Path
 from logging import getLogger
@@ -23,7 +22,10 @@ class VectorStore:
                               If None, uses VECTOR_STORE_PATH from config.
         """
         self.config = RAGConfig()
-        self.embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+        self.embeddings = BedrockEmbeddings(
+            model_id=self.config.BEDROCK_EMBEDDING_MODEL_ID,
+            region_name=self.config.BEDROCK_REGION
+        )
         
         # Determine persistence path
         if persist_directory is None:
@@ -73,12 +75,6 @@ class VectorStore:
             logger.error(f"Error saving vector store: {e}")
             raise e
 
-    @task(
-        name="Add Documents",
-        description="Add documents to the vector store",
-        retries=3,
-        retry_delay_seconds=10,
-    )
     def add_documents(self, documents: List[Document]):
         """
         Add documents to the vector store and persist to disk.
@@ -219,7 +215,7 @@ vector_store = get_vector_store()
 if __name__ == "__main__":
     # Example usage
     vector_store = get_vector_store()
-    documents = load_document(r"C:\Users\User\Projects\hadith_scholar\data\QLORA.pdf")
+    documents = load_document(r"data\Small Language Models in the Era of Large.pdf")
     chunked_docs = chunk_documents(documents)
     with open('chunked_docs.txt', "w") as f:
         for doc in chunked_docs:

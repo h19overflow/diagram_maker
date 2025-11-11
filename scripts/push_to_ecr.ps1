@@ -15,9 +15,9 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
-# Step 2: Build the Docker image
-Write-Host "Building Docker image..."
-docker build -t diagram-maker:$IMAGE_TAG .
+# Step 2: Build the Docker image for Linux/amd64 (EC2 compatibility)
+Write-Host "Building Docker image for Linux/amd64..."
+docker build --platform linux/amd64 -t diagram-maker:$IMAGE_TAG .
 
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Error: Docker build failed" -ForegroundColor Red
