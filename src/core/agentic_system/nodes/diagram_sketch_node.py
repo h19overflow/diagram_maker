@@ -9,7 +9,7 @@ logger = getLogger(__name__)
 config = RAGConfig()
 
 
-def diagram_sketch_node(state: GraphState) -> GraphState:
+def diagram_sketch_node(state) -> dict:
     """
     Diagram sketch node that validates query relevance before generating diagram skeleton.
 
@@ -17,7 +17,8 @@ def diagram_sketch_node(state: GraphState) -> GraphState:
     examining similarity scores. If scores are below the threshold, returns an error.
     """
     try:
-        question = state.user_input
+        # Handle both dict and GraphState object access
+        question = state.get("user_input") if isinstance(state, dict) else state.user_input
 
         # Search with scores to check relevance
         results_with_scores = asyncio.run(
@@ -26,9 +27,9 @@ def diagram_sketch_node(state: GraphState) -> GraphState:
 
         if len(results_with_scores) == 0:
             logger.warning(f"No documents found for query: {question}")
-            return GraphState(
-                error_message="No relevant documents found. Please ensure documents are uploaded and the query is related to the document content."
-            )
+            return {
+                "error_message": "No relevant documents found. Please ensure documents are uploaded and the query is related to the document content."
+            }
 
         # Extract scores (second element of each tuple)
         scores = [score for _, score in results_with_scores]
@@ -46,26 +47,25 @@ def diagram_sketch_node(state: GraphState) -> GraphState:
             logger.warning(
                 f"Query '{question}' has low relevance (max score: {max_score:.3f} < threshold: {config.RELEVANCE_THRESHOLD})"
             )
-            return GraphState(
-                error_message=(
+            return {
+                "error_message": (
                     "The question is not sufficiently relevant to the documents in the knowledge base. "
                     "Please rephrase your question to better match the document content, or upload relevant documents."
                 )
-            )
+            }
 
         # Query is relevant, proceed with diagram generation
         logger.info("Query passed relevance check, proceeding with diagram generation")
         structured_response = invoke_agent(question)
 
         if structured_response is None:
-            return GraphState(error_message="Failed to generate diagram skeleton")
+            return {"error_message": "Failed to generate diagram skeleton"}
 
-        state.diagram_skeleton = structured_response
         return {"diagram_skeleton": structured_response, "error_message": None}
 
     except Exception as e:
         logger.error(f"Error in diagram sketch node: {e}")
-        return GraphState(error_message=f"Error in diagram sketch node: {e}")
+        return {"error_message": f"Error in diagram sketch node: {e}"}
 
 
 if __name__ == "__main__":

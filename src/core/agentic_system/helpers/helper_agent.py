@@ -2,10 +2,57 @@ from langchain_aws import ChatBedrockConverse
 from src.core.agentic_system.respone_formats import HelperResponse
 from langchain_core.prompts import ChatPromptTemplate
 from langchain.agents import create_agent
+from langchain_core.documents import Document
+from typing import List
 from logging import getLogger
 from src.core.agentic_system.helpers.consts import get_system_prompt, get_user_prompt_template
 
 logger = getLogger(__name__)
+
+
+def _format_documents_to_context(documents: List[Document]) -> str:
+    """
+    Format a list of documents into a context string.
+    Concatenates all page_content and appends sources with page numbers at the end.
+
+    Args:
+        documents: List of Document objects
+
+    Returns:
+        Formatted context string with content and sources
+    """
+    if not documents:
+        return ""
+
+    # Concatenate all page_content with newline separators
+    content_parts = [doc.page_content for doc in documents if doc.page_content]
+    context_text = "\n\n".join(content_parts)
+
+    # Extract page numbers from metadata
+    page_numbers = []
+    for doc in documents:
+        if doc.metadata:
+            # Try different possible keys for page number
+            page = (
+                doc.metadata.get("page") or
+                doc.metadata.get("page_number") or
+                doc.metadata.get("pagenumber")
+            )
+            if page is not None:
+                try:
+                    page_num = int(page)
+                    if page_num not in page_numbers:
+                        page_numbers.append(page_num)
+                except (ValueError, TypeError):
+                    pass
+
+    # Sort page numbers and format sources
+    if page_numbers:
+        page_numbers.sort()
+        sources_text = f"Sources: page {', page '.join(map(str, page_numbers))}"
+        return f"{context_text}\n\n{sources_text}"
+
+    return context_text
 
 
 def get_llm() -> ChatBedrockConverse:
@@ -20,7 +67,7 @@ def get_llm() -> ChatBedrockConverse:
         return None
 
 
-def get_prompt(input: str, context: str):
+def get_prompt():
     """Get the prompt for the helper agent"""
     try:
         prompt = ChatPromptTemplate.from_messages(
@@ -56,16 +103,32 @@ def get_agent():
         return None
 
 
-def invoke_agent(input: str, context: str) -> HelperResponse:
-    """Invoke the agent for the helper agent and return structured response"""
+def invoke_agent(input: str, context: List[Document] | str) -> HelperResponse:
+    """
+    Invoke the agent for the helper agent and return structured response.
+
+    Args:
+        input: The question/input to answer
+        context: Either a list of Document objects or a string context
+
+    Returns:
+        HelperResponse object or None on error
+    """
     try:
         agent = get_agent()
         if agent is None:
             raise ValueError("Failed to initialize agent")
-        prompt_template = get_prompt(input, context)
+        prompt_template = get_prompt()
         if prompt_template is None:
             raise ValueError("Failed to create prompt template")
-        prompt = prompt_template.invoke({"context": context, "input": input})
+
+        # Convert Document list to formatted string if needed
+        if isinstance(context, list):
+            context_str = _format_documents_to_context(context)
+        else:
+            context_str = context
+
+        prompt = prompt_template.invoke({"context": context_str, "input": input})
         response = agent.invoke(prompt)
         return response
     except Exception as e:

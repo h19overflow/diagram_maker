@@ -77,9 +77,17 @@ def invoke_agent(input: str) -> NodeTitles:
         logger.info("Prompt generated successfully")
         response = agent.invoke(prompt)
 
+        # Extract structured_response from agent response (create_agent returns dict with messages and structured_response)
+        if isinstance(response, dict):
+            structured_response = response.get("structured_response")
+        elif hasattr(response, "structured_response"):
+            structured_response = response.structured_response
+        else:
+            structured_response = response
+
         # Validate hierarchical structure and node count
-        if response and hasattr(response, "nodes"):
-            node_count = len(response.nodes)
+        if structured_response and hasattr(structured_response, "nodes"):
+            node_count = len(structured_response.nodes)
             logger.info(f"Validating hierarchical structure with {node_count} nodes")
 
             # Check node count limit
@@ -89,14 +97,14 @@ def invoke_agent(input: str) -> NodeTitles:
                 )
 
             # Validate structure
-            if not validate_hierarchical_structure(response.nodes):
+            if not validate_hierarchical_structure(structured_response.nodes):
                 logger.warning(
                     "Hierarchical structure validation found issues - reviewing output"
                 )
 
             logger.info("Hierarchical structure validation completed")
 
-        return response
+        return structured_response
     except Exception as e:
         logger.error(f"Error invoking agent for orchestrator agent: {e}")
         return None

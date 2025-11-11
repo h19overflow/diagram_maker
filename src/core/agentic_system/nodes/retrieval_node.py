@@ -26,20 +26,28 @@ async def _search_for_node(node) -> tuple[str, List[Document]]:
         return (title, [])  # Empty list on error
 
 
-async def retrieval_node(state: GraphState) -> GraphState:
+async def retrieval_node(state) -> dict:
     """
     Retrieval node that searches for documents for each node title in the diagram skeleton.
     Populates context_docs as a dictionary mapping node titles to their corresponding documents.
     All searches are performed in parallel for better performance.
     """
     try:
-        if state.diagram_skeleton is None or not state.diagram_skeleton.nodes:
+        # Handle both dict and GraphState object access
+        diagram_skeleton = state.get("diagram_skeleton") if isinstance(state, dict) else state.diagram_skeleton
+
+        # Convert dict to NodeTitles if needed
+        if isinstance(diagram_skeleton, dict):
+            from src.core.agentic_system.respone_formats import NodeTitles
+            diagram_skeleton = NodeTitles(**diagram_skeleton)
+
+        if diagram_skeleton is None or not diagram_skeleton.nodes:
             logger.warning("No diagram skeleton or nodes found in state")
-            return GraphState(error_message="No diagram skeleton found for retrieval")
+            return {"error_message": "No diagram skeleton found for retrieval"}
         
         # Create tasks for all searches to run in parallel
         search_tasks = [
-            _search_for_node(node) for node in state.diagram_skeleton.nodes
+            _search_for_node(node) for node in diagram_skeleton.nodes
         ]
         
         # Execute all searches in parallel
@@ -59,10 +67,10 @@ async def retrieval_node(state: GraphState) -> GraphState:
         }
     except Exception as e:
         logger.error(f"Error in retrieval node: {e}")
-        return GraphState(error_message=f"Error in retrieval node: {e}")
+        return {"error_message": f"Error in retrieval node: {e}"}
 
 
-def retrieval_node_sync(state: GraphState) -> GraphState:
+def retrieval_node_sync(state) -> dict:
     """
     Synchronous wrapper for the async retrieval node.
     """
@@ -70,7 +78,7 @@ def retrieval_node_sync(state: GraphState) -> GraphState:
         return asyncio.run(retrieval_node(state))
     except Exception as e:
         logger.error(f"Error in retrieval node sync wrapper: {e}")
-        return GraphState(error_message=f"Error in retrieval node: {e}")
+        return {"error_message": f"Error in retrieval node: {e}"}
 
 
 if __name__ == "__main__":
