@@ -6,6 +6,7 @@ from src.core.agentic_system.helpers.helper_agent import invoke_agent
 from src.core.agentic_system.respone_formats import HierarchicalNodeTitle
 from langchain_core.documents import Document
 from src.core.pipeline.vector_store import vector_store
+from src.core.pipeline.retrieval import Retriever
 from src.configs.rag_config import RAGConfig
 from typing import List, Tuple, Optional
 from logging import getLogger
@@ -13,6 +14,29 @@ import asyncio
 
 logger = getLogger(__name__)
 config = RAGConfig()
+
+# Initialize retriever - will be updated when vector store is loaded
+_retriever_instance: Optional[Retriever] = None
+
+
+def get_retriever() -> Retriever:
+    """
+    Get or create the retriever instance, ensuring it's initialized with the current vector store.
+
+    Returns:
+        Retriever instance
+    """
+    global _retriever_instance
+    if _retriever_instance is None:
+        _retriever_instance = Retriever(vector_store.vector_store)
+    elif _retriever_instance.vector_store != vector_store.vector_store:
+        # Update retriever if vector store has changed
+        _retriever_instance.set_vector_store(vector_store.vector_store)
+    return _retriever_instance
+
+
+# Convenience: Create instance on module import
+retriever = get_retriever()
 
 
 async def populate_node_description(
@@ -83,7 +107,8 @@ async def search_for_node(node: HierarchicalNodeTitle) -> tuple[str, List[Docume
 
     try:
         # Perform async search with top k=3 documents per node
-        documents = await vector_store.search(query=title, k=3)
+        retriever = get_retriever()
+        documents = await retriever.search(query=title, k=3)
         logger.info(f"Found {len(documents)} documents for title: {title}")
         return (title, documents)
     except Exception as e:
@@ -105,7 +130,8 @@ async def validate_query_relevance(query: str) -> Tuple[bool, Optional[str]]:
     """
     try:
         # Search with scores to check relevance
-        results_with_scores = await vector_store.search_with_scores(query, k=10)
+        retriever = get_retriever()
+        results_with_scores = await retriever.search_with_scores(query, k=10)
 
         if len(results_with_scores) == 0:
             logger.warning(f"No documents found for query: {query}")

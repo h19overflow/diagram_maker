@@ -143,7 +143,7 @@ class VectorStore:
             logger.error(f"Error saving vector store: {e}")
             raise e
 
-    def add_documents(self, documents: List[Document], batch_size: int = 200, max_workers: int = 5):
+    def add_documents(self, documents: List[Document], batch_size: int = 200, max_workers: int = 2):
         """
         Add documents to the vector store and persist to disk.
         
@@ -208,7 +208,7 @@ class VectorStore:
             logger.error(f"Error adding documents: {e}")
             raise e
 
-    def _embed_documents_in_batches(self, texts: List[str], batch_size: int = 100, max_workers: int = 5) -> List[List[float]]:
+    def _embed_documents_in_batches(self, texts: List[str], batch_size: int = 100, max_workers: int = 2) -> List[List[float]]:
         """
         Embed documents in batches with parallel processing for better performance.
 
@@ -298,66 +298,6 @@ class VectorStore:
                     logger.error(f"Error processing batch {batch_num}: {e}")
                     raise e
 
-    async def search(self, query: str, k: int = 10) -> List[Document]:
-        """
-        Search for similar documents in the vector store.
-        
-        Args:
-            query: Search query string
-            k: Number of results to return
-            
-        Returns:
-            List of Document objects
-        """
-        try:
-            if self.vector_store is None:
-                logger.warning("Vector store is empty, returning empty results")
-                return []
-            
-            return await self.vector_store.asimilarity_search(
-                query=query,
-                k=k,
-            )
-        except Exception as e:
-            logger.error(f"Error searching: {e}")
-            raise e
-
-    async def search_with_scores(self, query: str, k: int = 10) -> List[tuple[Document, float]]:
-        """
-        Search for similar documents with similarity scores.
-        
-        Args:
-            query: Search query string
-            k: Number of results to return
-            
-        Returns:
-            List of tuples containing (Document, score) pairs.
-            Scores are normalized similarity scores in the range [0, 1] (higher = more similar).
-            FAISS returns distance scores, which are converted to similarity scores here.
-        """
-        try:
-            if self.vector_store is None:
-                logger.warning("Vector store is empty, returning empty results")
-                return []
-            
-            # FAISS returns distance scores (lower = more similar)
-            # For cosine similarity, distance = 1 - cosine_similarity
-            results = await self.vector_store.asimilarity_search_with_score(
-                query=query,
-                k=k,
-            )
-            
-            # Convert distance scores to similarity scores in [0, 1] range
-            # Using 1 / (1 + distance) to ensure scores are always in [0, 1]
-            # This works for both cosine distance and L2 distance
-            normalized_results = [
-                (doc, 1.0 / (1.0 + distance)) for doc, distance in results
-            ]
-            
-            return normalized_results
-        except Exception as e:
-            logger.error(f"Error searching with scores: {e}")
-            raise e
 
 
 # Singleton pattern with lazy initialization
@@ -409,9 +349,11 @@ vector_store = get_vector_store()
 
 if __name__ == "__main__":
     # Example usage
+    from src.core.pipeline.retrieval import Retriever
+
     print("Starting vector store creation")
     vector_store = get_vector_store()
-    documents = load_document(r"data\Small Language Models in the Era of Large.pdf")
+    documents = load_document(r"data\React_paper.pdf")
     chunked_docs = chunk_documents(documents)
     print("Chunking documents")
     with open('chunked_docs.txt', "w") as f:
@@ -421,7 +363,9 @@ if __name__ == "__main__":
     vector_store.add_documents(chunked_docs)
     print("Documents added to vector store")
 
-    results = asyncio.run(vector_store.search("What is the main idea of the document?", k=10))
+    # Use Retriever for search operations
+    retriever = Retriever(vector_store.vector_store)
+    results = asyncio.run(retriever.search("What is the main idea of the document?", k=10))
     with open('results.txt', "w") as f:
         for result in results:
             f.write(result.page_content + "\n")
