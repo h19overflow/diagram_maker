@@ -4,7 +4,10 @@ from src.core.agentic_system.respone_formats import (
     Edges,
     IRSDiagramResponse,
 )
-from src.core.agentic_system.nodes.mermaid_parsing import parse_to_flowchart
+from src.core.agentic_system.nodes.mermaid_parsing import (
+    parse_to_flowchart,
+    save_mermaid_to_file,
+)
 from src.api.schemas.enums import DiagramType
 from logging import getLogger
 import asyncio
@@ -19,13 +22,22 @@ async def helper_populating_node_async(state) -> dict:
     """
     try:
         # Handle both dict and GraphState object access
-        diagram_skeleton = state.get("diagram_skeleton") if isinstance(state, dict) else state.diagram_skeleton
-        context_docs = state.get("context_docs") if isinstance(state, dict) else state.context_docs
-        user_input = state.get("user_input") if isinstance(state, dict) else state.user_input
+        diagram_skeleton = (
+            state.get("diagram_skeleton")
+            if isinstance(state, dict)
+            else state.diagram_skeleton
+        )
+        context_docs = (
+            state.get("context_docs") if isinstance(state, dict) else state.context_docs
+        )
+        user_input = (
+            state.get("user_input") if isinstance(state, dict) else state.user_input
+        )
 
         # Convert dict to NodeTitles if needed
         if isinstance(diagram_skeleton, dict):
             from src.core.agentic_system.respone_formats import NodeTitles
+
             diagram_skeleton = NodeTitles(**diagram_skeleton)
 
         # Validate required state
@@ -41,7 +53,15 @@ async def helper_populating_node_async(state) -> dict:
         tasks = []
         for node in diagram_skeleton.nodes:
             # Get documents for this node's title
-            documents = context_docs.get(node.title, []) if isinstance(context_docs, dict) else (context_docs.get(node.title, []) if hasattr(context_docs, "get") else [])
+            documents = (
+                context_docs.get(node.title, [])
+                if isinstance(context_docs, dict)
+                else (
+                    context_docs.get(node.title, [])
+                    if hasattr(context_docs, "get")
+                    else []
+                )
+            )
             if not documents:
                 logger.warning(f"No documents found for node title: {node.title}")
 
@@ -109,12 +129,23 @@ async def helper_populating_node_async(state) -> dict:
             edges=[edges_obj],  # List containing single Edges object
         )
 
-        logger.info(f"Successfully populated diagram with {len(node_ids)} nodes and {len(edge_sources)} edges")
+        logger.info(
+            f"Successfully populated diagram with {len(node_ids)} nodes and {len(edge_sources)} edges"
+        )
 
         # Generate Mermaid diagram syntax automatically
+        mermaid_filepath = None
         try:
             mermaid_diagram = parse_to_flowchart(final_diagram)
             logger.info("Successfully generated Mermaid diagram syntax")
+            # Save Mermaid diagram to file
+            try:
+                mermaid_filepath = save_mermaid_to_file(
+                    mermaid_diagram, diagram_title=diagram_title
+                )
+                logger.info(f"Mermaid diagram saved to {mermaid_filepath}")
+            except Exception as save_error:
+                logger.warning(f"Failed to save Mermaid diagram to file: {save_error}")
         except Exception as e:
             logger.warning(f"Failed to generate Mermaid diagram: {e}")
             mermaid_diagram = None
@@ -122,6 +153,7 @@ async def helper_populating_node_async(state) -> dict:
         return {
             "final_diagram": final_diagram,
             "mermaid_diagram": mermaid_diagram,
+            "mermaid_filepath": mermaid_filepath,
             "error_message": None,
         }
     except Exception as e:

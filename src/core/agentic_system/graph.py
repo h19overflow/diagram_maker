@@ -190,6 +190,16 @@ if __name__ == "__main__":
                         if nodes_obj.description and nodes_obj.description[i]:
                             desc_preview = nodes_obj.description[i][:100] + "..." if len(nodes_obj.description[i]) > 100 else nodes_obj.description[i]
                             print(f"      Description: {desc_preview}")
+            # Print Mermaid diagram info
+            mermaid_diagram = final_state.get("mermaid_diagram")
+            mermaid_filepath = final_state.get("mermaid_filepath")
+            if mermaid_diagram:
+                print("\n📊 Mermaid Diagram Generated:")
+                print(f"  File saved to: {mermaid_filepath if mermaid_filepath else 'Not saved'}")
+                print("\n  Preview (first 500 chars):")
+                print("  " + "\n  ".join(mermaid_diagram[:500].split("\n")))
+                if len(mermaid_diagram) > 500:
+                    print("  ...")
 
     except Exception as e:
         print(f"\n❌ Exception occurred: {e}")

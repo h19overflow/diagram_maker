@@ -47,7 +47,9 @@ async def populate_node_description(
         if isinstance(helper_response, dict):
             structured_response = helper_response.get("structured_response")
             if structured_response is None:
-                logger.warning(f"No structured_response in helper response dict for node {node.node_id}")
+                logger.warning(
+                    f"No structured_response in helper response dict for node {node.node_id}"
+                )
                 return (node.node_id, "")
             helper_response = structured_response
 
@@ -55,7 +57,9 @@ async def populate_node_description(
         if hasattr(helper_response, "response"):
             description = helper_response.response if helper_response.response else ""
         else:
-            logger.warning(f"Unexpected helper response type for node {node.node_id}: {type(helper_response)}")
+            logger.warning(
+                f"Unexpected helper response type for node {node.node_id}: {type(helper_response)}"
+            )
             description = ""
 
         return (node.node_id, description)
@@ -105,7 +109,10 @@ async def validate_query_relevance(query: str) -> Tuple[bool, Optional[str]]:
 
         if len(results_with_scores) == 0:
             logger.warning(f"No documents found for query: {query}")
-            return (False, "No relevant documents found. Please ensure documents are uploaded and the query is related to the document content.")
+            return (
+                False,
+                "No relevant documents found. Please ensure documents are uploaded and the query is related to the document content.",
+            )
 
         # Extract scores (second element of each tuple)
         scores = [score for _, score in results_with_scores]
@@ -123,10 +130,13 @@ async def validate_query_relevance(query: str) -> Tuple[bool, Optional[str]]:
             logger.warning(
                 f"Query '{query}' has low relevance (max score: {max_score:.3f} < threshold: {config.RELEVANCE_THRESHOLD})"
             )
-            return (False, (
-                "The question is not sufficiently relevant to the documents in the knowledge base. "
-                "Please rephrase your question to better match the document content, or upload relevant documents."
-            ))
+            return (
+                False,
+                (
+                    "The question is not sufficiently relevant to the documents in the knowledge base. "
+                    "Please rephrase your question to better match the document content, or upload relevant documents."
+                ),
+            )
 
         # Query is relevant
         logger.info("Query passed relevance check")
@@ -134,4 +144,3 @@ async def validate_query_relevance(query: str) -> Tuple[bool, Optional[str]]:
     except Exception as e:
         logger.error(f"Error validating query relevance: {e}")
         return (False, f"Error validating query relevance: {e}")
-

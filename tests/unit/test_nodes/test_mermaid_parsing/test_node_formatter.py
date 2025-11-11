@@ -103,45 +103,59 @@ class TestFormatNodeLabel:
 
     def test_title_only(self):
         """Test formatting with title only."""
-        result = format_node_label("Node Title")
-        assert result == "Node Title"
+        label, needs_quotes = format_node_label("Node Title")
+        assert label == "Node Title"
+        assert needs_quotes is False
 
     def test_title_with_description(self):
         """Test formatting with title and description."""
-        result = format_node_label("Node Title", "Description text")
-        assert result == "Node Title<br/>Description text"
+        label, needs_quotes = format_node_label("Node Title", "Description text")
+        assert label == "Node Title<br/>Description text"
+        assert needs_quotes is False
 
     def test_description_truncation(self):
         """Test that long descriptions are truncated."""
         long_desc = "A" * 150
-        result = format_node_label("Title", long_desc, max_length=100)
-        assert "<br/>" in result
-        assert len(result.split("<br/>")[1]) <= 100
-        assert result.endswith("...")
+        label, needs_quotes = format_node_label("Title", long_desc, max_length=100)
+        assert "<br/>" in label
+        assert len(label.split("<br/>")[1]) <= 100
+        assert label.endswith("...")
 
     def test_special_chars_in_title(self):
         """Test that special characters in title are escaped."""
-        result = format_node_label("A & B", "Description")
-        assert "&amp;" in result
+        label, needs_quotes = format_node_label("A & B", "Description")
+        assert "&amp;" in label
 
     def test_special_chars_in_description(self):
         """Test that special characters in description are escaped."""
-        result = format_node_label("Title", "A < B")
-        assert "&lt;" in result
+        label, needs_quotes = format_node_label("Title", "A < B")
+        assert "&lt;" in label
 
     def test_none_description(self):
         """Test that None description is handled."""
-        result = format_node_label("Title", None)
-        assert result == "Title"
+        label, needs_quotes = format_node_label("Title", None)
+        assert label == "Title"
+        assert needs_quotes is False
 
     def test_empty_description(self):
         """Test that empty description is handled."""
-        result = format_node_label("Title", "")
-        assert result == "Title"
+        label, needs_quotes = format_node_label("Title", "")
+        assert label == "Title"
+        assert needs_quotes is False
 
     def test_very_long_title(self):
         """Test that very long titles are preserved."""
         long_title = "A" * 200
-        result = format_node_label(long_title, "Description")
-        assert long_title in result
+        label, needs_quotes = format_node_label(long_title, "Description")
+        assert long_title in label
+
+    def test_parentheses_need_quotes(self):
+        """Test that labels with parentheses need quotes."""
+        label, needs_quotes = format_node_label("Node (Title)")
+        assert needs_quotes is True
+
+    def test_brackets_need_quotes(self):
+        """Test that labels with brackets need quotes."""
+        label, needs_quotes = format_node_label("Node [Title]")
+        assert needs_quotes is True
 

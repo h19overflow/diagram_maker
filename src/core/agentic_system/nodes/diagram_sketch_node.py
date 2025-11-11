@@ -16,7 +16,9 @@ def diagram_sketch_node(state) -> dict:
     """
     try:
         # Handle both dict and GraphState object access
-        question = state.get("user_input") if isinstance(state, dict) else state.user_input
+        question = (
+            state.get("user_input") if isinstance(state, dict) else state.user_input
+        )
 
         # Validate query relevance
         is_relevant, error_message = asyncio.run(validate_query_relevance(question))
@@ -40,4 +42,4 @@ def diagram_sketch_node(state) -> dict:
 if __name__ == "__main__":
     state = GraphState(user_input="ًwhat is Qlora and how it works?")
     result = diagram_sketch_node(state)
-    print(result['diagram_skeleton'])
+    print(result["diagram_skeleton"])

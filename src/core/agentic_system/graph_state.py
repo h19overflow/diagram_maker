@@ -14,4 +14,5 @@ class GraphState(BaseModel):
     )
     final_diagram: Optional[IRSDiagramResponse] = Field(description="The final diagram",default=None)
     mermaid_diagram: Optional[str] = Field(description="The Mermaid diagram syntax",default=None)
+    mermaid_filepath: Optional[str] = Field(description="Path to the saved Mermaid .mmd file",default=None)
     error_message: Optional[str] = Field(description="The error message",default=None)
