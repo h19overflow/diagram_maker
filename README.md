@@ -471,7 +471,7 @@ flowchart TB
 
     Retrieval -->|Parallel Search| VectorStore2[Vector Store<br/>k=3 per node]
     VectorStore2 -->|Documents| Retrieval
-    Retrieval -->|context_docs<br/>Dict[title: Documents]| Helper[Helper Populating Node]
+    Retrieval -->|context_docs<br/>Dict(title: Documents)| Helper[Helper Populating Node]
 
     Helper -->|Parallel Description Gen| HelperAgent[Helper Agent<br/>Amazon Bedrock Nova Pro]
     HelperAgent -->|HelperResponse| Helper
@@ -497,7 +497,7 @@ flowchart LR
     subgraph GraphState["GraphState (Pydantic BaseModel)"]
         UserInput[user_input: str]
         DiagramSkeleton[diagram_skeleton: NodeTitles]
-        ContextDocs[context_docs: Dict[str, List[Document]]]
+        ContextDocs["context_docs: Dict(str, List(Document))"]
         FinalDiagram[final_diagram: IRSDiagramResponse]
         ErrorMsg[error_message: str]
     end
@@ -513,7 +513,7 @@ flowchart LR
         SearchTask1[Search Task 1<br/>title → docs]
         SearchTask2[Search Task 2<br/>title → docs]
         SearchTaskN[Search Task N<br/>title → docs]
-        ContextDict[Build context_docs<br/>Dict[title: List[Document]]]
+        ContextDict["Build context_docs<br/>Dict(title: List(Document))"]
     end
 
     subgraph Node3["3. Helper Populating Node"]
@@ -710,7 +710,7 @@ flowchart TD
     Parallel --> Task2[Search Task 2<br/>title2 → docs2]
     Parallel --> TaskN[Search Task N<br/>titleN → docsN]
 
-    Task1 --> Build[Build context_docs<br/>Dict[title: List[Document]]]
+    Task1 --> Build["Build context_docs<br/>Dict(title: List(Document))"]
     Task2 --> Build
     TaskN --> Build
     Build --> Output[Return context_docs]
