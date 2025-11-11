@@ -1,29 +1,11 @@
 from src.core.agentic_system.graph_state import GraphState
+from src.core.agentic_system.nodes.utils import search_for_node
 from langchain_core.documents import Document
 from typing import Dict, List
 from logging import getLogger
 import asyncio
-from src.core.pipeline.vector_store import vector_store
 
 logger = getLogger(__name__)
-
-
-async def _search_for_node(node) -> tuple[str, List[Document]]:
-    """
-    Helper function to search for documents for a single node title.
-    Returns a tuple of (title, documents).
-    """
-    title = node.title
-    logger.info(f"Searching for documents with query: {title}")
-
-    try:
-        # Perform async search with top k=3 documents per node
-        documents = await vector_store.search(query=title, k=3)
-        logger.info(f"Found {len(documents)} documents for title: {title}")
-        return (title, documents)
-    except Exception as e:
-        logger.error(f"Error searching for title '{title}': {e}")
-        return (title, [])  # Empty list on error
 
 
 async def retrieval_node(state) -> dict:
@@ -47,7 +29,7 @@ async def retrieval_node(state) -> dict:
         
         # Create tasks for all searches to run in parallel
         search_tasks = [
-            _search_for_node(node) for node in diagram_skeleton.nodes
+            search_for_node(node) for node in diagram_skeleton.nodes
         ]
         
         # Execute all searches in parallel

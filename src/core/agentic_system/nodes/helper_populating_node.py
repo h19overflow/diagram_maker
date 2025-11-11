@@ -1,61 +1,15 @@
-from src.core.agentic_system.helpers.helper_agent import invoke_agent
+from src.core.agentic_system.nodes.utils import populate_node_description
 from src.core.agentic_system.respone_formats import (
-    HierarchicalNodeTitle,
     Nodes,
     Edges,
     IRSDiagramResponse,
 )
+from src.core.agentic_system.nodes.mermaid_parsing import parse_to_flowchart
 from src.api.schemas.enums import DiagramType
-from langchain_core.documents import Document
-from typing import List
 from logging import getLogger
 import asyncio
 
 logger = getLogger(__name__)
-
-
-async def _populate_node_description(
-    node: HierarchicalNodeTitle,
-    documents: List[Document],
-) -> tuple[str, str]:
-    """
-    Helper function to populate description for a single node using the helper agent.
-
-    Args:
-        node: HierarchicalNodeTitle node to populate
-        documents: List of documents retrieved for this node's title
-
-    Returns:
-        Tuple of (node_id, description) where description comes from HelperResponse.response
-    """
-    try:
-        logger.info(f"Populating description for node: {node.node_id} - {node.title}")
-
-        # Call helper agent with node title and documents in thread pool for true parallelism
-        loop = asyncio.get_event_loop()
-        helper_response = await loop.run_in_executor(
-            None, invoke_agent, node.title, documents
-        )
-
-        if helper_response is None:
-            logger.warning(f"Helper agent returned None for node {node.node_id}")
-            return (node.node_id, "")
-
-        # Helper agent now returns HelperResponse directly (extracted in helper_agent.py)
-        if hasattr(helper_response, "response"):
-            description = helper_response.response if helper_response.response else ""
-        elif isinstance(helper_response, dict):
-            description = helper_response.get("response", "")
-        else:
-            logger.warning(f"Unexpected helper response type for node {node.node_id}: {type(helper_response)}")
-            description = ""
-
-        logger.info(f"Generated description for node {node.node_id} (length: {len(description)})")
-
-        return (node.node_id, description)
-    except Exception as e:
-        logger.error(f"Error populating description for node {node.node_id}: {e}")
-        return (node.node_id, "")
 
 
 async def helper_populating_node_async(state) -> dict:
@@ -92,7 +46,7 @@ async def helper_populating_node_async(state) -> dict:
                 logger.warning(f"No documents found for node title: {node.title}")
 
             # Create task for this node
-            tasks.append(_populate_node_description(node, documents))
+            tasks.append(populate_node_description(node, documents))
 
         # Execute all tasks in parallel
         logger.info(f"Starting parallel description population for {len(tasks)} nodes")
@@ -157,8 +111,17 @@ async def helper_populating_node_async(state) -> dict:
 
         logger.info(f"Successfully populated diagram with {len(node_ids)} nodes and {len(edge_sources)} edges")
 
+        # Generate Mermaid diagram syntax automatically
+        try:
+            mermaid_diagram = parse_to_flowchart(final_diagram)
+            logger.info("Successfully generated Mermaid diagram syntax")
+        except Exception as e:
+            logger.warning(f"Failed to generate Mermaid diagram: {e}")
+            mermaid_diagram = None
+
         return {
             "final_diagram": final_diagram,
+            "mermaid_diagram": mermaid_diagram,
             "error_message": None,
         }
     except Exception as e:

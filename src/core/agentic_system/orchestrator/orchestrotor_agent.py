@@ -1,4 +1,3 @@
-from langchain_aws import ChatBedrockConverse
 from langchain_core.prompts import ChatPromptTemplate
 from langchain.agents import create_agent
 from src.core.agentic_system.respone_formats import NodeTitles
@@ -14,17 +13,17 @@ logger = logging.getLogger(__name__)
 
 
 
-
-def get_llm() -> ChatBedrockConverse:
-    """Get the LLM for the orchestrator agent"""
-    try:
-        llm = ChatBedrockConverse(
-            model_id="amazon.nova-pro-v1:0",
-        )
-        return llm
-    except Exception as e:
-        logger.error(f"Error getting LLM for orchestrator agent: {e}")
-        return None
+# Trial 1: Using Bedrock
+# def get_llm() -> ChatBedrockConverse:
+#     """Get the LLM for the orchestrator agent"""
+#     try:
+#         llm = ChatBedrockConverse(
+#             model_id="amazon.nova-pro-v1:0",
+#         )
+#         return llm
+#     except Exception as e:
+#         logger.error(f"Error getting LLM for orchestrator agent: {e}")
+#         return None
 
 
 def get_prompt(input: str):
@@ -47,11 +46,8 @@ def get_prompt(input: str):
 def get_agent():
     """Get the agent for the orchestrator agent"""
     try:
-        llm = get_llm()
-        if llm is None:
-            raise ValueError("Failed to initialize LLM")
         agent = create_agent(
-            model=llm,
+            model='google_genai:gemini-2.5-flash-lite',
             tools=[],
             response_format=NodeTitles,
         )

@@ -13,4 +13,5 @@ class GraphState(BaseModel):
         description="The diagram skeleton",default=None
     )
     final_diagram: Optional[IRSDiagramResponse] = Field(description="The final diagram",default=None)
+    mermaid_diagram: Optional[str] = Field(description="The Mermaid diagram syntax",default=None)
     error_message: Optional[str] = Field(description="The error message",default=None)

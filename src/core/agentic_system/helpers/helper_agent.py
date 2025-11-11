@@ -1,4 +1,4 @@
-from langchain_aws import ChatBedrockConverse
+# from langchain_aws import ChatBedrockConverse
 from src.core.agentic_system.respone_formats import HelperResponse
 from langchain_core.prompts import ChatPromptTemplate
 from langchain.agents import create_agent
@@ -55,16 +55,16 @@ def _format_documents_to_context(documents: List[Document]) -> str:
     return context_text
 
 
-def get_llm() -> ChatBedrockConverse:
-    """Get the LLM for the helper agent"""
-    try:
-        llm = ChatBedrockConverse(
-            model_id="amazon.nova-pro-v1:0",
-        )
-        return llm
-    except Exception as e:
-        logger.error(f"Error getting LLM for helper agent: {e}")
-        return None
+# def get_llm() -> ChatBedrockConverse:
+#     """Get the LLM for the helper agent"""
+#     try:
+#         llm = ChatBedrockConverse(
+#             model_id="amazon.nova-pro-v1:0",
+#         )
+#         return llm
+#     except Exception as e:
+#         logger.error(f"Error getting LLM for helper agent: {e}")
+#         return None
 
 
 def get_prompt():
@@ -92,7 +92,7 @@ def get_agent():
     """Get the agent for the helper agent"""
     try:
         agent = create_agent(
-            model=get_llm(),
+            model='google_genai:gemini-2.5-flash-lite',
             tools=[],
             system_prompt=get_system_prompt(),
             response_format=HelperResponse,

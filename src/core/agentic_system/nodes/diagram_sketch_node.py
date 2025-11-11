@@ -1,12 +1,10 @@
 from src.core.agentic_system.graph_state import GraphState
+from src.core.agentic_system.nodes.utils import validate_query_relevance
 from src.core.agentic_system.orchestrator.orchestrotor_agent import invoke_agent
-from src.core.pipeline.vector_store import vector_store
-from src.configs.rag_config import RAGConfig
 from logging import getLogger
 import asyncio
 
 logger = getLogger(__name__)
-config = RAGConfig()
 
 
 def diagram_sketch_node(state) -> dict:
@@ -20,39 +18,10 @@ def diagram_sketch_node(state) -> dict:
         # Handle both dict and GraphState object access
         question = state.get("user_input") if isinstance(state, dict) else state.user_input
 
-        # Search with scores to check relevance
-        results_with_scores = asyncio.run(
-            vector_store.search_with_scores(question, k=10)
-        )
-
-        if len(results_with_scores) == 0:
-            logger.warning(f"No documents found for query: {question}")
-            return {
-                "error_message": "No relevant documents found. Please ensure documents are uploaded and the query is related to the document content."
-            }
-
-        # Extract scores (second element of each tuple)
-        scores = [score for _, score in results_with_scores]
-
-        # Check the highest score (most relevant document)
-        max_score = max(scores) if scores else 0.0
-        avg_score = sum(scores) / len(scores) if scores else 0.0
-
-        logger.info(
-            f"Query relevance check - Max score: {max_score:.3f}, Avg score: {avg_score:.3f}, Threshold: {config.RELEVANCE_THRESHOLD}"
-        )
-
-        # Check if relevance is too low
-        if max_score < config.RELEVANCE_THRESHOLD:
-            logger.warning(
-                f"Query '{question}' has low relevance (max score: {max_score:.3f} < threshold: {config.RELEVANCE_THRESHOLD})"
-            )
-            return {
-                "error_message": (
-                    "The question is not sufficiently relevant to the documents in the knowledge base. "
-                    "Please rephrase your question to better match the document content, or upload relevant documents."
-                )
-            }
+        # Validate query relevance
+        is_relevant, error_message = asyncio.run(validate_query_relevance(question))
+        if not is_relevant:
+            return {"error_message": error_message}
 
         # Query is relevant, proceed with diagram generation
         logger.info("Query passed relevance check, proceeding with diagram generation")
@@ -71,4 +40,4 @@ def diagram_sketch_node(state) -> dict:
 if __name__ == "__main__":
     state = GraphState(user_input="ًwhat is Qlora and how it works?")
     result = diagram_sketch_node(state)
-    print(result['diagram_skeleton']['structured_response'])
+    print(result['diagram_skeleton'])
