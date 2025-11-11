@@ -130,7 +130,16 @@ def invoke_agent(input: str, context: List[Document] | str) -> HelperResponse:
 
         prompt = prompt_template.invoke({"context": context_str, "input": input})
         response = agent.invoke(prompt)
-        return response
+
+        # Extract structured_response from agent response (create_agent returns dict with messages and structured_response)
+        if isinstance(response, dict):
+            structured_response = response.get("structured_response")
+        elif hasattr(response, "structured_response"):
+            structured_response = response.structured_response
+        else:
+            structured_response = response
+
+        return structured_response
     except Exception as e:
         logger.error(f"Error invoking agent for helper agent: {e}")
         return None

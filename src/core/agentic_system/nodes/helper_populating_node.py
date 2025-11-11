@@ -41,15 +41,15 @@ async def _populate_node_description(
             logger.warning(f"Helper agent returned None for node {node.node_id}")
             return (node.node_id, "")
 
-        # Extract response from helper agent (create_agent returns dict with structured_response)
-        if isinstance(helper_response, dict):
-            response_obj = helper_response.get("structured_response", helper_response)
-        elif hasattr(helper_response, "structured_response"):
-            response_obj = helper_response.structured_response
+        # Helper agent now returns HelperResponse directly (extracted in helper_agent.py)
+        if hasattr(helper_response, "response"):
+            description = helper_response.response if helper_response.response else ""
+        elif isinstance(helper_response, dict):
+            description = helper_response.get("response", "")
         else:
-            response_obj = helper_response
+            logger.warning(f"Unexpected helper response type for node {node.node_id}: {type(helper_response)}")
+            description = ""
 
-        description = response_obj.response if hasattr(response_obj, "response") and response_obj.response else ""
         logger.info(f"Generated description for node {node.node_id} (length: {len(description)})")
 
         return (node.node_id, description)
@@ -68,10 +68,12 @@ async def helper_populating_node_async(state) -> dict:
         diagram_skeleton = state.get("diagram_skeleton") if isinstance(state, dict) else state.diagram_skeleton
         context_docs = state.get("context_docs") if isinstance(state, dict) else state.context_docs
         user_input = state.get("user_input") if isinstance(state, dict) else state.user_input
+
         # Convert dict to NodeTitles if needed
         if isinstance(diagram_skeleton, dict):
             from src.core.agentic_system.respone_formats import NodeTitles
             diagram_skeleton = NodeTitles(**diagram_skeleton)
+
         # Validate required state
         if diagram_skeleton is None or not diagram_skeleton.nodes:
             logger.warning("No diagram skeleton or nodes found in state")
