@@ -41,8 +41,8 @@ class RAGConfig(BaseSettings):
     EMBEDDING_DIMENSION: int = Field(default=1024, description="Titan v2 embedding dimension: 1024")
     
     # ========== Text Chunking Configuration ==========
-    CHUNK_SIZE: int = Field(default=1000, description="Chunk size in tokens (500-1000 recommended)")
-    CHUNK_OVERLAP: int = Field(default=200, description="Overlap between chunks in tokens (100-200 recommended)")
+    CHUNK_SIZE: int = Field(default=5128, description="Chunk size in tokens (500-1000 recommended)")
+    CHUNK_OVERLAP: int = Field(default=300, description="Overlap between chunks in tokens (100-200 recommended)")
     
     # ========== Retrieval Configuration ==========
     # BM25 Configuration

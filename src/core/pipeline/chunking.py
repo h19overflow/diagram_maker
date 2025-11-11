@@ -7,6 +7,7 @@ from typing import List
 from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from logging import getLogger
+from tqdm import tqdm
 
 from src.configs.rag_config import RAGConfig
 from src.core.pipeline.document_loader import load_document
@@ -20,7 +21,6 @@ def _build_text_splitter(options: RAGConfig) -> RecursiveCharacterTextSplitter:
     return RecursiveCharacterTextSplitter(
         chunk_size=options.CHUNK_SIZE,
         chunk_overlap=options.CHUNK_OVERLAP,
-        separators=["\n\n", "\n", "。", ". ", "۔", " ", ""],
         add_start_index=True,
     )
 
@@ -29,7 +29,10 @@ def chunk_documents(documents: List[Document]) -> List[Document]:
     """Takes in a list of documents and chunks them into retrieval-ready chunks with metadata."""
     try:
         splitter = _build_text_splitter(RAGConfig())
-        split_docs = splitter.split_documents(documents)
+        # Show progress while chunking documents
+        with tqdm(total=len(documents), desc="Chunking documents", unit="doc") as pbar:
+            split_docs = splitter.split_documents(documents)
+            pbar.update(len(documents))
         return split_docs
     except Exception as e:
         logger.error(f"Error chunking documents: {e}")

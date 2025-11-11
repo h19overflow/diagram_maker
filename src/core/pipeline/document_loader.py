@@ -6,6 +6,7 @@ from typing import List
 from langchain_core.documents import Document
 from langchain_community.document_loaders import PyPDFLoader
 from logging import getLogger
+from tqdm import tqdm
 
 logger = getLogger(__name__)
 
@@ -26,7 +27,13 @@ def load_document(
     logger.info(f"Loading document from {file_path}")
     try:
         loader = PyPDFLoader(str(file_path))
-        documents = loader.load()
+        # Load documents with progress bar
+        documents = []
+        # PyPDFLoader loads pages sequentially, so we'll show progress
+        with tqdm(desc="Loading PDF pages", unit="page") as pbar:
+            documents = loader.load()
+            pbar.total = len(documents)
+            pbar.update(len(documents))
     except Exception as e:
         logger.error(f"Error loading document: {e}")
         raise e
@@ -48,8 +55,10 @@ def save_documents(documents: List[Document], output_file: str) -> Path:
     """Write the text content of each Document to a plain text file."""
     try:
         with open(output_file, "w", encoding="utf-8") as f:
-            for doc in documents:
-                f.write(doc.page_content + "\n")
+            with tqdm(total=len(documents), desc="Saving documents", unit="doc") as pbar:
+                for doc in documents:
+                    f.write(doc.page_content + "\n")
+                    pbar.update(1)
         return Path(output_file)
     except Exception as e:
         logger.error(f"Error saving documents: {e}")
