@@ -96,7 +96,7 @@ def invoke_agent(input: str) -> NodeTitles:
 
             logger.info("Hierarchical structure validation completed")
 
-        return response["structured_response"]
+        return response
     except Exception as e:
         logger.error(f"Error invoking agent for orchestrator agent: {e}")
         return None
@@ -105,4 +105,4 @@ def invoke_agent(input: str) -> NodeTitles:
 if __name__ == "__main__":
     input = "I want to create a diagram of the human body"
     response = invoke_agent(input)
-    print(response["structured_response"])
+    print(response)

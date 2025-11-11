@@ -141,18 +141,29 @@ class VectorStore:
             
         Returns:
             List of tuples containing (Document, score) pairs.
-            Scores are similarity scores (higher = more similar).
-            For cosine similarity, scores range from -1 to 1, typically 0 to 1.
+            Scores are normalized similarity scores in the range [0, 1] (higher = more similar).
+            FAISS returns distance scores, which are converted to similarity scores here.
         """
         try:
             if self.vector_store is None:
                 logger.warning("Vector store is empty, returning empty results")
                 return []
             
-            return await self.vector_store.asimilarity_search_with_score(
+            # FAISS returns distance scores (lower = more similar)
+            # For cosine similarity, distance = 1 - cosine_similarity
+            results = await self.vector_store.asimilarity_search_with_score(
                 query=query,
                 k=k,
             )
+            
+            # Convert distance scores to similarity scores in [0, 1] range
+            # Using 1 / (1 + distance) to ensure scores are always in [0, 1]
+            # This works for both cosine distance and L2 distance
+            normalized_results = [
+                (doc, 1.0 / (1.0 + distance)) for doc, distance in results
+            ]
+            
+            return normalized_results
         except Exception as e:
             logger.error(f"Error searching with scores: {e}")
             raise e

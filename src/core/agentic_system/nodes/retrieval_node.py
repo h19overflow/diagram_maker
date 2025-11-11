@@ -1,5 +1,4 @@
 from src.core.agentic_system.graph_state import GraphState
-from src.core.pipeline.vector_store import VectorStore
 from langchain_core.documents import Document
 from typing import Dict, List
 from logging import getLogger
@@ -9,32 +8,48 @@ from src.core.pipeline.vector_store import vector_store
 logger = getLogger(__name__)
 
 
+async def _search_for_node(node) -> tuple[str, List[Document]]:
+    """
+    Helper function to search for documents for a single node title.
+    Returns a tuple of (title, documents).
+    """
+    title = node.title
+    logger.info(f"Searching for documents with query: {title}")
+
+    try:
+        # Perform async search with top k=3 documents per node
+        documents = await vector_store.search(query=title, k=3)
+        logger.info(f"Found {len(documents)} documents for title: {title}")
+        return (title, documents)
+    except Exception as e:
+        logger.error(f"Error searching for title '{title}': {e}")
+        return (title, [])  # Empty list on error
+
+
 async def retrieval_node(state: GraphState) -> GraphState:
     """
     Retrieval node that searches for documents for each node title in the diagram skeleton.
     Populates context_docs as a dictionary mapping node titles to their corresponding documents.
+    All searches are performed in parallel for better performance.
     """
     try:
         if state.diagram_skeleton is None or not state.diagram_skeleton.nodes:
             logger.warning("No diagram skeleton or nodes found in state")
             return GraphState(error_message="No diagram skeleton found for retrieval")
         
-        # Dictionary to store title -> documents mapping
-        context_docs_dict: Dict[str, List[Document]] = {}
+        # Create tasks for all searches to run in parallel
+        search_tasks = [
+            _search_for_node(node) for node in state.diagram_skeleton.nodes
+        ]
         
-        # Search for documents for each node title
-        for node in state.diagram_skeleton.nodes:
-            title = node.title
-            logger.info(f"Searching for documents with query: {title}")
-            
-            try:
-                # Perform async search
-                documents = await vector_store.search(query=title, k=10)
-                context_docs_dict[title] = documents
-                logger.info(f"Found {len(documents)} documents for title: {title}")
-            except Exception as e:
-                logger.error(f"Error searching for title '{title}': {e}")
-                context_docs_dict[title] = []  # Empty list on error
+        # Execute all searches in parallel
+        logger.info(f"Starting parallel retrieval for {len(search_tasks)} node titles")
+        results = await asyncio.gather(*search_tasks)
+
+        # Build dictionary from results
+        context_docs_dict: Dict[str, List[Document]] = {
+            title: documents for title, documents in results
+        }
         
         logger.info(f"Retrieved documents for {len(context_docs_dict)} node titles")
         
@@ -65,14 +80,14 @@ if __name__ == "__main__":
     test_nodes = [
         HierarchicalNodeTitle(
             node_id="node_001",
-            title="What are the major systems in the human body?",
+            title="How is fine tuninng works?",
             hierarchy_level=0,
             parent_node_id=None,
             children_node_ids=["node_002", "node_003"]
         ),
         HierarchicalNodeTitle(
             node_id="node_002",
-            title="What are the primary components of the circulatory system?",
+            title="What is Qlora and how it works?",
             hierarchy_level=1,
             parent_node_id="node_001",
             children_node_ids=[]

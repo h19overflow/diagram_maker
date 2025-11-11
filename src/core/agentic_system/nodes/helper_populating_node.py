@@ -6,7 +6,7 @@ def helper_populating_node(state: GraphState) -> GraphState:
     try:
         question = state.user_input
         context = state.context_docs
-        structured_response = invoke_agent(question, context)["structured_response"]
+        structured_response = invoke_agent(question, context)
         if structured_response is None:
             return GraphState(error_message="Failed to generate helper response")
         state.helper_response = structured_response
