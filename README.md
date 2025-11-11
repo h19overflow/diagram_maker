@@ -76,8 +76,12 @@ All AWS resources are defined using **Terraform modules** following best practic
 - **Modular Design**: Reusable Terraform modules for each infrastructure component
 - **Environment-Aware**: Supports multiple environments (dev, staging, prod) via variables
 - **Resource Configuration**: Each AWS resource properly configured with versioning, encryption, lifecycle rules, and access controls
+- **IAM Roles**: Secure IAM roles with least-privilege policies for EC2 instances
+- **Security Hardening**: EC2 instances configured with encryption, monitoring, and IMDSv2 enforcement
 
 **Terraform Workflow Documentation**: [`Docs/terraform_mmd/terraform_workflow.md`](Docs/terraform_mmd/terraform_workflow.md)
+
+**EC2 and IAM Setup Documentation**: [`Docs/ec2_iam_setup.md`](Docs/ec2_iam_setup.md)
 
 ### S3 Bucket Architecture
 
@@ -95,7 +99,69 @@ Both buckets include:
 - Lifecycle policies
 - Proper IAM access controls
 
-## Code Architecture Patterns
+### EC2 Instance and IAM Roles
+
+The application runs on EC2 instances with secure IAM roles providing access to AWS services:
+
+**EC2 Instance Configuration:**
+- **AMI**: Ubuntu 22.04 LTS (Jammy)
+- **Instance Type**: Configurable (default: `t2.medium`)
+- **Security Features**:
+  - IAM instance profile attached (no hardcoded credentials)
+  - Detailed CloudWatch monitoring enabled
+  - EBS optimization enabled
+  - IMDSv2 enforced (IMDSv1 disabled)
+  - EBS root volume encryption enabled
+
+**IAM Roles and Policies:**
+- **Bedrock Policy**: Access to Amazon Titan Embeddings v2 and Nova LLM models
+  - Titan Embeddings v2 (`amazon.titan-embed-text-v2:0`) - 1024-dimensional embeddings
+  - Nova Lite (`amazon.nova-lite-v1:0`) - Lightweight LLM
+  - Nova Pro (`amazon.nova-pro-v1:0`) - Advanced LLM
+- **S3 Policy**: Access to knowledge base bucket (GetObject, PutObject, DeleteObject, ListBucket)
+- **CloudWatch Logs Policy**: Full access for application logging
+
+**Key Benefits:**
+- No AWS credentials stored on instances
+- Least-privilege access patterns
+- Automatic credential rotation
+- Secure metadata service access
+
+**Documentation**: [`Docs/ec2_iam_setup.md`](Docs/ec2_iam_setup.md)
+
+### RAG Pipeline and Embeddings
+
+The application uses **Amazon Titan Embeddings v2** for vector-based document retrieval:
+
+**Embedding Model:**
+- **Model**: Amazon Titan Embeddings v2 (`amazon.titan-embed-text-v2:0`)
+- **Dimensions**: 1024-dimensional vectors
+- **Multilingual Support**: Supports multiple languages including Arabic
+- **Cloud-Based**: No local model files, reducing Docker image size and deployment complexity
+
+**Key Benefits:**
+- **Reduced Image Size**: No need for large ML libraries (PyTorch, transformers) in Docker image
+- **Scalability**: Cloud-based embeddings scale automatically with demand
+- **Performance**: Optimized for production workloads with low latency
+- **Cost Efficiency**: Pay-per-use pricing model
+- **Maintenance**: AWS manages model updates and optimizations
+
+**Chunking Strategy:**
+- **Target Chunk Size**: 4000 tokens
+- **Minimum Chunk Size**: 2048 tokens (chunks below this are merged)
+- **Overlap**: 300 tokens between chunks
+- **Optimization**: Chunking strategy optimized for Titan v2's 1024-dimensional embeddings
+
+**Vector Store:**
+- **Storage**: FAISS (Facebook AI Similarity Search) index
+- **Embeddings**: Pre-computed using Titan v2 via parallel API calls
+- **Persistence**: Vector store saved to disk for fast reloading
+- **Search**: Similarity search with normalized scores (0-1 range)
+
+**Performance Optimizations:**
+- **Parallel Embedding**: Batch processing with concurrent API calls using ThreadPoolExecutor
+- **Progress Tracking**: tqdm progress bars for long-running operations
+- **Batch Processing**: Configurable batch sizes for optimal throughput
 
 ### Singleton Pattern for Vector Store
 
@@ -116,6 +182,39 @@ from src.core.pipeline.vector_store import vector_store
 results = await vector_store.search("query", k=10)
 ```
 
+### Separation of Concerns: Vector Store and Retrieval
+
+The codebase follows a clean separation between storage management and search functionality:
+
+- **Vector Store** (`src/core/pipeline/vector_store.py`): Handles document storage, embedding generation using Amazon Titan Embeddings v2, and FAISS index management
+- **Retrieval Service** (`src/core/pipeline/retrieval.py`): Handles search operations and query processing with similarity score normalization
+
+This separation provides:
+- Clear responsibility boundaries
+- Easier testing and mocking
+- Flexible search implementations
+- Better code organization
+
+**Embedding Generation:**
+- Uses `BedrockEmbeddings` from LangChain AWS integration
+- Parallel batch processing for efficient embedding generation
+- Automatic retry and error handling
+- Progress tracking with tqdm
+
+```python
+from src.core.pipeline.vector_store import get_vector_store
+from src.core.pipeline.retrieval import Retriever
+
+# Initialize vector store with Titan Embeddings v2
+vector_store = get_vector_store()
+vector_store.add_documents(documents)
+
+# Use retriever for search operations
+retriever = Retriever(vector_store.vector_store)
+results = await retriever.search("query", k=10)
+results_with_scores = await retriever.search_with_scores("query", k=10)
+```
+
 ## Agentic System Architecture
 
 The diagram generation system is built using **LangGraph**, a framework for building stateful, multi-agent applications. The system orchestrates three main nodes that work together to transform user queries into structured diagrams.
@@ -126,7 +225,7 @@ The diagram generation system is built using **LangGraph**, a framework for buil
 flowchart TB
     Start([User Input]) --> Sketch[Diagram Sketch Node]
 
-    Sketch -->|Query Relevance Check| VectorStore[Vector Store<br/>FAISS + Embeddings]
+    Sketch -->|Query Relevance Check| VectorStore[Vector Store<br/>FAISS + Titan Embeddings v2]
     VectorStore -->|Similarity Scores<br/>0-1 Range| Sketch
 
     Sketch -->|Relevance Valid| Orchestrator[Orchestrator Agent<br/>Amazon Bedrock Nova Pro]
@@ -592,19 +691,28 @@ filepath = save_mermaid_to_file(mermaid_diagram, diagram_title="My Diagram")
 
 1. **State Management**: LangGraph outputs dictionaries even when initialized with Pydantic BaseModel. All nodes handle both dict and object access patterns.
 
-2. **Parallel Execution**:
+2. **Embedding Model**: The application uses Amazon Titan Embeddings v2 (`amazon.titan-embed-text-v2:0`) for all vector operations:
+   - 1024-dimensional embeddings optimized for production workloads
+   - Cloud-based API calls via AWS Bedrock (no local model files)
+   - Parallel batch processing with ThreadPoolExecutor for efficient embedding generation
+   - Automatic retry and error handling for robust operation
+
+3. **Parallel Execution**:
    - Retrieval node uses `asyncio.gather` for parallel document searches
    - Helper populating node uses `loop.run_in_executor` for parallel agent calls
+   - Embedding generation uses ThreadPoolExecutor for concurrent API calls
 
-3. **Error Handling**: Each node returns `error_message` in state, and routing functions check for errors before proceeding.
+4. **Error Handling**: Each node returns `error_message` in state, and routing functions check for errors before proceeding.
 
-4. **Agent Response Extraction**: Both orchestrator and helper agents extract `structured_response` from the agent's dictionary output (which contains both `messages` and `structured_response`).
+5. **Agent Response Extraction**: Both orchestrator and helper agents extract `structured_response` from the agent's dictionary output (which contains both `messages` and `structured_response`).
 
-5. **Similarity Score Normalization**: FAISS distance scores are normalized to 0-1 similarity range using `1.0 / (1.0 + distance)`.
+6. **Similarity Score Normalization**: FAISS distance scores are normalized to 0-1 similarity range using `1.0 / (1.0 + distance)`. This normalization works with Titan v2's 1024-dimensional embeddings.
 
-6. **Mermaid Diagram Generation**: The `helper_populating_node` automatically generates Mermaid flowchart syntax from `IRSDiagramResponse`, using different node shapes based on hierarchy levels and including descriptions in node labels. The diagram is automatically saved to a `.mmd` file in the `Docs/` directory with the file path stored in `GraphState.mermaid_filepath`.
+7. **Chunking Strategy**: Documents are chunked with a minimum of 2048 tokens per chunk, optimized for Titan v2's embedding capabilities. Smaller chunks are automatically merged to meet the minimum requirement.
 
-7. **Special Character Handling**: Labels containing parentheses, brackets, or other special characters are automatically wrapped in quotes to prevent Mermaid parsing errors. This ensures valid syntax even when node titles or descriptions contain characters like `(NF4)`, `[text]`, etc.
+8. **Mermaid Diagram Generation**: The `helper_populating_node` automatically generates Mermaid flowchart syntax from `IRSDiagramResponse`, using different node shapes based on hierarchy levels and including descriptions in node labels. The diagram is automatically saved to a `.mmd` file in the `Docs/` directory with the file path stored in `GraphState.mermaid_filepath`.
+
+9. **Special Character Handling**: Labels containing parentheses, brackets, or other special characters are automatically wrapped in quotes to prevent Mermaid parsing errors. This ensures valid syntax even when node titles or descriptions contain characters like `(NF4)`, `[text]`, etc.
 
 ## Project Structure
 
@@ -614,13 +722,17 @@ diagram_maker/
 │   ├── modules/           # Reusable Terraform modules
 │   │   ├── s3_frontend/  # Frontend hosting module
 │   │   ├── s3_kb/        # Knowledge base storage module
-│   │   └── ...
+│   │   ├── app_instance/ # EC2 instance with IAM roles
+│   │   └── ecr/          # ECR repository module
 │   ├── main.tf           # Root module definitions
 │   └── variables.tf      # Environment variables
 ├── src/                   # Application code
 │   ├── api/              # FastAPI endpoints
 │   ├── boundary/         # Data access layer
 │   ├── core/             # Business logic
+│   │   ├── pipeline/     # RAG pipeline components
+│   │   │   ├── vector_store.py  # Vector store management
+│   │   │   └── retrieval.py    # Search/retrieval service
 │   │   └── agentic_system/
 │   │       └── nodes/
 │   │           └── mermaid_parsing/  # Mermaid diagram generation
@@ -629,7 +741,9 @@ diagram_maker/
 ├── Docs/                  # Architecture and deployment documentation
 │   ├── arch_mmd/         # Architecture diagrams
 │   ├── terraform_mmd/    # Terraform workflow diagrams
+│   ├── ec2_iam_setup.md  # EC2 and IAM roles documentation
 │   └── vector_store_singleton_pattern.md
+├── DOCKER_RUN.md         # Docker deployment guide
 └── tests/                 # Comprehensive test suite
 ```
 
@@ -644,15 +758,26 @@ diagram_maker/
 ### Scalability
 
 - **Stateless Application Design**: Enables horizontal scaling
+- **Cloud-Based Embeddings**: Amazon Titan Embeddings v2 scales automatically with demand, no local resource constraints
 - **S3 Lifecycle Policies**: Automatic archival and expiration
 - **Database Connection Pooling**: Optimized for concurrent requests
 - **CDN Integration**: CloudFront for global content delivery
+- **Parallel Processing**: Embedding generation and retrieval operations use parallel processing for optimal throughput
 
 ### Security
 
-- **IAM Roles**: Least-privilege access patterns
+- **IAM Roles**: Least-privilege access patterns with instance profiles
+  - EC2 instances use IAM roles instead of access keys
+  - Bedrock access limited to specific model ARNs (Titan Embeddings v2, Nova Lite/Pro)
+  - S3 access scoped to knowledge base bucket only
+  - CloudWatch logs access for monitoring
+- **EC2 Security Hardening**:
+  - IMDSv2 enforcement (prevents SSRF attacks)
+  - EBS volume encryption at rest
+  - Detailed monitoring enabled
+  - EBS optimization for performance
 - **Encryption**: At-rest and in-transit encryption
-- **VPC Endpoints**: Private network access to AWS services
+- **VPC Endpoints**: Private network access to AWS services (ready for implementation)
 - **WAF Integration**: Web application firewall ready
 
 ### Observability
@@ -697,9 +822,20 @@ terraform plan -var="environment=dev"
 # Apply infrastructure
 terraform apply -var="environment=dev"
 
-# View outputs
+# View outputs (includes EC2 instance details and IAM role ARNs)
 terraform output
 ```
+
+**Infrastructure Modules Deployed:**
+- S3 Frontend Bucket (static website hosting)
+- S3 Knowledge Base Bucket (document storage)
+- ECR Repository (Docker image storage)
+- EC2 Instance with IAM Roles (application hosting)
+
+**EC2 Instance Outputs:**
+- Instance ID and IP addresses (public/private)
+- IAM role ARN and instance profile name
+- Use these outputs to configure your application or connect to the instance
 
 ## Testing Strategy
 
@@ -714,7 +850,9 @@ All deployment and architecture documentation is located in the [`Docs/`](Docs/)
 
 - **Architecture Diagrams**: Mermaid diagrams for infrastructure design
 - **Terraform Workflows**: Step-by-step module creation and usage
+- **EC2 and IAM Setup**: Comprehensive guide for EC2 instance and IAM roles configuration
 - **Code Patterns**: Design patterns and best practices
+- **Docker Deployment**: Guide for building and running Docker containers
 
 ## Key Design Principles
 

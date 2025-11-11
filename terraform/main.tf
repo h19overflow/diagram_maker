@@ -22,3 +22,10 @@ module "ecr" {
   environment = var.environment
   resource_prefix = var.resource_prefix
 }
+
+module "app_instance" {
+  source = "./modules/app_instance"
+  environment     = var.environment
+  s3_bucket_name  = module.s3_kb.bucket_id
+  instance_name   = "diagram-maker-app-${var.environment}"
+}
