@@ -25,7 +25,8 @@ module "ecr" {
 
 module "app_instance" {
   source = "./modules/app_instance"
-  environment     = var.environment
-  s3_bucket_name  = module.s3_kb.bucket_id
-  instance_name   = "diagram-maker-app-${var.environment}"
+  environment         = var.environment
+  s3_bucket_name      = module.s3_kb.bucket_id
+  instance_name       = "diagram-maker-app-${var.environment}"
+  ecr_repository_name = "${var.resource_prefix}-diagram-maker-ecr-repo"  # Scopes ECR permissions to this repo
 }

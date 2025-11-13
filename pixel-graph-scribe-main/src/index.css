@@ -1,0 +1,129 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
+All colors MUST be HSL.
+*/
+
+@layer base {
+  :root {
+    /* Pixel theme - green/black */
+    --background: 144 40% 4%;
+    --foreground: 120 100% 95%;
+
+    --card: 144 35% 8%;
+    --card-foreground: 120 100% 95%;
+
+    --popover: 144 40% 6%;
+    --popover-foreground: 120 100% 95%;
+
+    --primary: 151 100% 50%;
+    --primary-foreground: 144 100% 5%;
+
+    --secondary: 146 100% 56%;
+    --secondary-foreground: 144 100% 5%;
+
+    --muted: 144 30% 12%;
+    --muted-foreground: 120 20% 65%;
+
+    --accent: 151 100% 50%;
+    --accent-foreground: 144 100% 5%;
+
+    --destructive: 0 80% 55%;
+    --destructive-foreground: 120 100% 95%;
+
+    --border: 144 25% 10%;
+    --input: 144 25% 10%;
+    --ring: 151 100% 50%;
+
+    --grid: 144 20% 8%;
+    --pixel-shadow: 151 100% 30%;
+    
+    --radius: 0rem;
+
+    /* Pixel spacing */
+    --pixel-1: 1px;
+    --pixel-2: 2px;
+    --pixel-4: 4px;
+    --pixel-8: 8px;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-mono;
+  }
+
+  /* Pixel theme utilities */
+  .pixel-corners {
+    position: relative;
+  }
+  
+  .pixel-corners::before,
+  .pixel-corners::after {
+    content: '';
+    position: absolute;
+    width: 4px;
+    height: 4px;
+    background: hsl(var(--primary));
+  }
+  
+  .pixel-corners::before {
+    top: -2px;
+    left: -2px;
+  }
+  
+  .pixel-corners::after {
+    bottom: -2px;
+    right: -2px;
+  }
+
+  .pixel-shadow {
+    box-shadow: 2px 2px 0 hsl(var(--pixel-shadow));
+  }
+
+  .pixel-border {
+    border: 2px solid hsl(var(--border));
+  }
+
+  .dotted-separator {
+    background-image: repeating-linear-gradient(
+      90deg,
+      hsl(var(--border)) 0,
+      hsl(var(--border)) 4px,
+      transparent 4px,
+      transparent 8px
+    );
+    height: 2px;
+  }
+
+  .grid-pattern {
+    background-image: 
+      linear-gradient(hsl(var(--grid)) 1px, transparent 1px),
+      linear-gradient(90deg, hsl(var(--grid)) 1px, transparent 1px);
+    background-size: 20px 20px;
+  }
+
+  /* Scrollbar styling */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: hsl(var(--muted));
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--primary));
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--secondary));
+  }
+}
