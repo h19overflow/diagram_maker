@@ -106,9 +106,12 @@ async def search_for_node(node: HierarchicalNodeTitle) -> tuple[str, List[Docume
     logger.info(f"Searching for documents with query: {title}")
 
     try:
-        # Perform async search with top k=3 documents per node
+        # Use sync search wrapped in executor to avoid event loop issues
         retriever = get_retriever()
-        documents = await retriever.search(query=title, k=3)
+        loop = asyncio.get_event_loop()
+        documents = await loop.run_in_executor(
+            None, retriever.search_sync, title, 3
+        )
         logger.info(f"Found {len(documents)} documents for title: {title}")
         return (title, documents)
     except Exception as e:
@@ -129,9 +132,12 @@ async def validate_query_relevance(query: str) -> Tuple[bool, Optional[str]]:
         - error_message: Error message if not relevant, None if relevant
     """
     try:
-        # Search with scores to check relevance
+        # Use sync search wrapped in executor to avoid event loop issues
         retriever = get_retriever()
-        results_with_scores = await retriever.search_with_scores(query, k=10)
+        loop = asyncio.get_event_loop()
+        results_with_scores = await loop.run_in_executor(
+            None, retriever.search_with_scores_sync, query, 10
+        )
 
         if len(results_with_scores) == 0:
             logger.warning(f"No documents found for query: {query}")

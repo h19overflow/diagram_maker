@@ -1,4 +1,4 @@
-MAX_NODES = 6
+MAX_NODES = 10
 
 QUESTION_MARKERS = (
     "What",

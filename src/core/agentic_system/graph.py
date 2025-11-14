@@ -17,82 +17,6 @@ from logging import getLogger
 logger = getLogger(__name__)
 
 
-def route_after_sketch(state) -> str:
-    """
-    Route after diagram sketch node.
-
-    Args:
-        state: Current graph state (dict or GraphState)
-
-    Returns:
-        Next node name or END
-    """
-    # Handle both dict and GraphState object access
-    error_message = state.get("error_message") if isinstance(state, dict) else state.error_message
-    diagram_skeleton = state.get("diagram_skeleton") if isinstance(state, dict) else state.diagram_skeleton
-
-    if error_message:
-        logger.error(f"Graph stopped due to error: {error_message}")
-        return END
-
-    if diagram_skeleton:
-        logger.info("Routing to retrieval node")
-        return "retrieval"
-
-    logger.error("No diagram skeleton generated")
-    return END
-
-
-def route_after_retrieval(state) -> str:
-    """
-    Route after retrieval node.
-
-    Args:
-        state: Current graph state (dict or GraphState)
-
-    Returns:
-        Next node name or END
-    """
-    # Handle both dict and GraphState object access
-    error_message = state.get("error_message") if isinstance(state, dict) else state.error_message
-    context_docs = state.get("context_docs") if isinstance(state, dict) else state.context_docs
-
-    if error_message:
-        logger.error(f"Graph stopped due to error: {error_message}")
-        return END
-
-    if context_docs:
-        logger.info("Routing to helper populating node")
-        return "helper_populating"
-
-    logger.error("No context documents retrieved")
-    return END
-
-
-def route_after_helper(state) -> str:
-    """
-    Route after helper populating node.
-
-    Args:
-        state: Current graph state (dict or GraphState)
-
-    Returns:
-        END (always end after helper populating)
-    """
-    # Handle both dict and GraphState object access
-    error_message = state.get("error_message") if isinstance(state, dict) else state.error_message
-    final_diagram = state.get("final_diagram") if isinstance(state, dict) else state.final_diagram
-
-    if error_message:
-        logger.error(f"Graph stopped due to error: {error_message}")
-    elif final_diagram:
-        logger.info("Graph completed successfully")
-    else:
-        logger.warning("No final diagram generated")
-
-    return END
-
-
 def create_diagram_graph() -> StateGraph:
     """
     Create and configure the LangGraph for diagram generation.
@@ -111,25 +35,10 @@ def create_diagram_graph() -> StateGraph:
     # Set entry point
     workflow.set_entry_point("diagram_sketch")
 
-    # Add conditional edges
-    # When using a list, the routing function can return either a node name or END
-    workflow.add_conditional_edges(
-        "diagram_sketch",
-        route_after_sketch,
-        ["retrieval", END],
-    )
-
-    workflow.add_conditional_edges(
-        "retrieval",
-        route_after_retrieval,
-        ["helper_populating", END],
-    )
-
-    workflow.add_conditional_edges(
-        "helper_populating",
-        route_after_helper,
-        [END],
-    )
+    # Add direct edges - simple linear flow
+    workflow.add_edge("diagram_sketch", "retrieval")
+    workflow.add_edge("retrieval", "helper_populating")
+    workflow.add_edge("helper_populating", END)
 
     # Compile the graph
     app = workflow.compile()
