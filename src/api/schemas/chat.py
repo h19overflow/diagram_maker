@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, ConfigDict, conlist, confloat
+from pydantic import BaseModel, ConfigDict, conlist, confloat
 from typing import Optional
 from .enums import DiagramType
 

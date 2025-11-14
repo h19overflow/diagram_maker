@@ -36,29 +36,25 @@ resource "aws_s3_bucket_website_configuration" "static_site" {
   }
 }
 
-# Bucket policy removed - public access blocks are enabled
-# Access should be through CloudFront with Origin Access Control (OAC)
-# When CloudFront is configured, add a bucket policy that allows only CloudFront service access
-# Example (uncomment and configure when CloudFront is added):
-# resource "aws_s3_bucket_policy" "static_site" {
-#   bucket = aws_s3_bucket.static_site.id
-#   depends_on = [aws_s3_bucket_public_access_block.static_site]
-#
-#   policy = jsonencode({
-#     Version = "2012-10-17"
-#     Statement = [{
-#       Sid    = "AllowCloudFrontOAC"
-#       Effect = "Allow"
-#       Principal = {
-#         Service = "cloudfront.amazonaws.com"
-#       }
-#       Action   = "s3:GetObject"
-#       Resource = "${aws_s3_bucket.static_site.arn}/*"
-#       Condition = {
-#         StringEquals = {
-#           "AWS:SourceArn" = aws_cloudfront_distribution.static_site.arn
-#         }
-#       }
-#     }]
-#   })
-# }
+resource "aws_s3_bucket_policy" "static_site" {
+  bucket = aws_s3_bucket.static_site.id
+  depends_on = [aws_s3_bucket_public_access_block.static_site]
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Sid    = "AllowCloudFrontOAC"
+      Effect = "Allow"
+      Principal = {
+        Service = "cloudfront.amazonaws.com"
+      }
+      Action   = "s3:GetObject"
+      Resource = "${aws_s3_bucket.static_site.arn}/*"
+      Condition = {
+        StringEquals = {
+          "AWS:SourceArn" = aws_cloudfront_distribution.static_site.arn
+        }
+      }
+    }]
+  })
+}

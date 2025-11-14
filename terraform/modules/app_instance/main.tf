@@ -199,6 +199,47 @@ resource "aws_iam_role_policy_attachment" "ecr_attachment" {
   policy_arn = aws_iam_policy.ecr_policy.arn
 }
 
+# IAM Policy for RDS access (optional - for IAM database authentication)
+# Allows the EC2 instance to connect to RDS using IAM authentication (no passwords)
+# More secure than password-based authentication, uses temporary credentials
+resource "aws_iam_policy" "rds_policy" {
+  count       = var.enable_rds_iam_auth ? 1 : 0
+  name        = "diagram-maker-rds-policy-${var.environment}"
+  description = "Policy for RDS IAM database authentication"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        # Action to connect to RDS using IAM authentication
+        Action = [
+          "rds-db:connect"
+        ]
+        # Resource: specific RDS instance (uses resource ID)
+        # Format: arn:aws:rds-db:<region>:<account-id>:dbuser:<resource-id>/<db-username>
+        Resource = [
+          "arn:aws:rds-db:ap-southeast-2:${data.aws_caller_identity.current.account_id}:dbuser:${var.rds_resource_id}/*"
+        ]
+      }
+    ]
+  })
+
+  tags = {
+    Name        = "diagram-maker-rds-policy-${var.environment}"
+    Environment = var.environment
+  }
+}
+
+# Attach RDS policy to role (only if IAM auth is enabled)
+# Links the RDS permissions policy to the EC2 role
+# This gives the EC2 instance permission to use IAM authentication for RDS
+resource "aws_iam_role_policy_attachment" "rds_attachment" {
+  count      = var.enable_rds_iam_auth ? 1 : 0
+  role       = aws_iam_role.ec2_role.name
+  policy_arn = aws_iam_policy.rds_policy[0].arn
+}
+
 # Attach SSM (Session Manager) policy to role
 # Allows browser-based access to EC2 instance via AWS Systems Manager Session Manager
 # This enables secure access without SSH keys or open ports

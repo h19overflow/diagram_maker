@@ -48,3 +48,35 @@ output "kb_archive_prefix" {
   value       = module.s3_kb.archive_prefix
 }
 
+# RDS Database Outputs
+output "db_instance_endpoint" {
+  description = "RDS instance connection endpoint (hostname:port)"
+  value       = module.rds_db.db_instance_endpoint
+}
+
+output "db_instance_address" {
+  description = "RDS instance hostname"
+  value       = module.rds_db.db_instance_address
+}
+
+output "db_instance_port" {
+  description = "RDS instance port"
+  value       = module.rds_db.db_instance_port
+}
+
+output "db_name" {
+  description = "Database name"
+  value       = module.rds_db.db_name
+}
+
+output "db_connection_string" {
+  description = "PostgreSQL connection string (without password)"
+  value       = module.rds_db.connection_string
+  sensitive   = true
+}
+
+output "db_security_group_id" {
+  description = "Security group ID for the RDS instance"
+  value       = module.rds_db.db_security_group_id
+}
+

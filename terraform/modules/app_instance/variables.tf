@@ -48,3 +48,20 @@ variable "ecr_repository_name" {
   description = "Name of the ECR repository (e.g., dev-diagram-maker-ecr-repo)"
   default     = ""
 }
+
+# Input variable: RDS database resource ID (optional)
+# Used for IAM database authentication (more secure than password-based auth)
+# If provided, enables the EC2 instance to use IAM authentication for RDS
+variable "rds_resource_id" {
+  type        = string
+  description = "RDS database resource ID for IAM authentication (optional - leave empty to use password-based auth)"
+  default     = ""
+}
+
+# Input variable: Enable RDS IAM authentication (optional)
+# If true, creates IAM policy for database authentication
+variable "enable_rds_iam_auth" {
+  type        = bool
+  description = "Enable IAM database authentication for RDS access"
+  default     = false
+}
