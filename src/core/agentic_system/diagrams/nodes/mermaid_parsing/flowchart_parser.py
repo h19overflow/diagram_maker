@@ -35,11 +35,11 @@ def _get_node_shape(level: int) -> tuple[str, str]:
     if level == 0:
         return ("[", "]")  # Rectangle
     elif level == 1:
-        return ("(", ")")  # Rounded rectangle
+        return ("[", "]")  # Rounded rectangle
     elif level == 2:
-        return ("([", "])")  # Stadium shape
+        return ("[", "]")  # Stadium shape
     else:
-        return ("[(", ")]")  # Cylinder shape
+        return ("[", "]")  # Cylinder shape
 
 
 def parse_to_flowchart(diagram: IRSDiagramResponse) -> str:

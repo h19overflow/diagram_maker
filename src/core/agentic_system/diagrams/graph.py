@@ -5,6 +5,9 @@ This graph orchestrates the flow from user input to final diagram:
 1. Diagram Sketch Node - Validates query and generates diagram skeleton
 2. Retrieval Node - Retrieves relevant documents for each node
 3. Helper Populating Node - Generates descriptions and creates final diagram
+4. Mermaid Generation Node - Converts final diagram to Mermaid syntax
+5. Mermaid File Save Node - Saves Mermaid diagram to local file
+6. Mermaid S3 Upload Node - Uploads Mermaid diagram to S3 for later retrieval
 """
 
 from langgraph.graph import StateGraph, END
@@ -12,6 +15,9 @@ from src.core.agentic_system.diagrams.graph_state import GraphState
 from src.core.agentic_system.diagrams.nodes.diagram_sketch_node import diagram_sketch_node
 from src.core.agentic_system.diagrams.nodes.retrieval_node import retrieval_node_sync
 from src.core.agentic_system.diagrams.nodes.helper_populating_node import helper_populating_node
+from src.core.agentic_system.diagrams.nodes.mermaid_generation_node import mermaid_generation_node
+from src.core.agentic_system.diagrams.nodes.mermaid_file_save_node import mermaid_file_save_node
+from src.core.agentic_system.diagrams.nodes.mermaid_s3_upload_node import mermaid_s3_upload_node
 from logging import getLogger
 
 logger = getLogger(__name__)
@@ -31,6 +37,9 @@ def create_diagram_graph() -> StateGraph:
     workflow.add_node("diagram_sketch", diagram_sketch_node)
     workflow.add_node("retrieval", retrieval_node_sync)
     workflow.add_node("helper_populating", helper_populating_node)
+    workflow.add_node("mermaid_generation", mermaid_generation_node)
+    workflow.add_node("mermaid_file_save", mermaid_file_save_node)
+    workflow.add_node("mermaid_s3_upload", mermaid_s3_upload_node)
 
     # Set entry point
     workflow.set_entry_point("diagram_sketch")
@@ -38,7 +47,10 @@ def create_diagram_graph() -> StateGraph:
     # Add direct edges - simple linear flow
     workflow.add_edge("diagram_sketch", "retrieval")
     workflow.add_edge("retrieval", "helper_populating")
-    workflow.add_edge("helper_populating", END)
+    workflow.add_edge("helper_populating", "mermaid_generation")
+    workflow.add_edge("mermaid_generation", "mermaid_file_save")
+    workflow.add_edge("mermaid_file_save", "mermaid_s3_upload")
+    workflow.add_edge("mermaid_s3_upload", END)
 
     # Compile the graph
     app = workflow.compile()

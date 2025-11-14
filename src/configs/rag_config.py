@@ -59,7 +59,7 @@ class RAGConfig(BaseSettings):
     
     # ========== S3 Configuration ==========
     # Note: S3 bucket name, region, and credentials should be set via Terraform
-    S3_BUCKET_NAME: str = Field(..., description="S3 bucket for storing PDF documents")
+    S3_BUCKET_NAME_KB: str = Field(..., description="S3 bucket for storing mermaid diagrams")
     S3_PRESIGNED_URL_EXPIRATION: int = Field(
         default=3600,
         description="Presigned URL expiration time in seconds (default: 1 hour)"

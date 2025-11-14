@@ -95,7 +95,7 @@ def needs_quotes(text: str) -> bool:
 
 
 def format_node_label(
-    title: str, description: Optional[str] = None, max_length: int = 100
+    title: str, description: Optional[str] = None, max_length: int = 500
 ) -> tuple[str, bool]:
     """
     Format node labels with description included in the box.

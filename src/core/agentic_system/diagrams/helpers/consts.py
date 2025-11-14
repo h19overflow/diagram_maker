@@ -21,6 +21,8 @@ def get_system_prompt() -> str:
     your complete answer. Do NOT return response='' or an empty string. The response field is where your actual 
     answer text goes.
     
+    BE DIRECT AND CONCISE.
+    
     Your response must be informative enough to serve as the foundation for diagram generation, including 
     nodes, edges, and relationships. Be thorough but concise, ensuring every important detail from the 
     context relevant to the question is captured.

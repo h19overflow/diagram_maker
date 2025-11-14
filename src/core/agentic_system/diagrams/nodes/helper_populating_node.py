@@ -4,10 +4,6 @@ from src.core.agentic_system.respone_formats import (
     Edges,
     IRSDiagramResponse,
 )
-from src.core.agentic_system.diagrams.nodes.mermaid_parsing import (
-    parse_to_flowchart,
-    save_mermaid_to_file,
-)
 from src.api.schemas.enums import DiagramType
 from logging import getLogger
 import asyncio
@@ -133,27 +129,8 @@ async def helper_populating_node_async(state) -> dict:
             f"Successfully populated diagram with {len(node_ids)} nodes and {len(edge_sources)} edges"
         )
 
-        # Generate Mermaid diagram syntax automatically
-        mermaid_filepath = None
-        try:
-            mermaid_diagram = parse_to_flowchart(final_diagram)
-            logger.info("Successfully generated Mermaid diagram syntax")
-            # Save Mermaid diagram to file
-            try:
-                mermaid_filepath = save_mermaid_to_file(
-                    mermaid_diagram, diagram_title=diagram_title
-                )
-                logger.info(f"Mermaid diagram saved to {mermaid_filepath}")
-            except Exception as save_error:
-                logger.warning(f"Failed to save Mermaid diagram to file: {save_error}")
-        except Exception as e:
-            logger.warning(f"Failed to generate Mermaid diagram: {e}")
-            mermaid_diagram = None
-
         return {
             "final_diagram": final_diagram,
-            "mermaid_diagram": mermaid_diagram,
-            "mermaid_filepath": mermaid_filepath,
             "error_message": None,
         }
     except Exception as e:
