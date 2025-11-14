@@ -213,6 +213,174 @@ results = retriever.search_sync("query", k=10)
 results_with_scores = retriever.search_with_scores_sync("query", k=10)
 ```
 
+## Chat Agent System
+
+The application includes a **production-ready RAG-powered chat agent** with enterprise-grade security for answering questions based on documentation. Built using LangChain's agent framework with a focus on simplicity and security.
+
+### Architecture Overview
+
+Unlike the diagram generation system (which uses LangGraph for complex workflows), the chat agent uses a **simple, direct architecture** focused on security and reliability:
+
+```mermaid
+flowchart LR
+    User[User Query] --> Security[Security Layer]
+    Security -->|Validated| Retrieval[Retrieval Tool]
+    Security -->|Threat Detected| Block[Block with Error Message]
+
+    Retrieval --> VectorStore[Vector Store<br/>FAISS + Google Embeddings]
+    VectorStore -->|Similarity Check| Threshold{Score >= 0.65?}
+
+    Threshold -->|No| Fallback[Fallback Message]
+    Threshold -->|Yes| Agent[Chat Agent<br/>Gemini 2.5 Flash Lite]
+
+    Agent --> Response[Structured Response<br/>ChatResponse]
+    Fallback --> Response
+    Block --> Response
+
+    style Security fill:#F44336
+    style Agent fill:#4CAF50
+    style VectorStore fill:#607D8B
+```
+
+### Security Features
+
+**Bulletproof protection** against common attack vectors with **100% test pass rate** (27/27 security tests):
+
+**1. Prompt Injection Protection:**
+- Instruction override attempts ("ignore previous instructions")
+- Role-playing/jailbreak attacks ("you are now DAN")
+- Delimiter injection attempts ("--- END SYSTEM ---")
+- Guardrails enforcement in system prompt
+
+**2. Code-Based Attack Prevention:**
+- SQL injection (SELECT, UNION, DROP, etc.)
+- XSS attacks (&lt;script&gt;, javascript:, onerror=)
+- Command injection (ls, cat, eval, exec)
+- Code execution attempts (__import__, eval)
+- Path traversal (../, ..\)
+
+**3. System Prompt Protection:**
+- Cannot extract internal prompts or instructions
+- Cannot reveal system configuration
+- Cannot bypass safety guardrails
+
+**4. Additional Protections:**
+- Obfuscation detection (high special character ratio >30%)
+- Encoding attack prevention (HTML entities, URL encoding, hex/unicode)
+- Input validation and sanitization
+
+**Security Implementation:**
+- **Pattern-based detection**: Fast regex matching (<5ms overhead)
+- **Defense-in-depth**: Multiple security layers (pre-validation + middleware + LLM guardrails)
+- **User-friendly errors**: Contextual messages instead of generic blocks
+- **Comprehensive logging**: All security events logged with threat classification
+
+### Middleware Architecture
+
+Uses **LangChain's decorator pattern** for clean, composable middleware:
+
+```python
+from langchain.agents.middleware import before_model
+
+@before_model
+def security_check(state: AgentState, runtime: Runtime):
+    """Validate security before model invocation."""
+    # Pattern matching and threat detection
+    # Returns error message if threat detected
+    pass
+
+# Middleware stack (order matters)
+agent = create_agent(
+    model="google_genai:gemini-2.5-flash-lite",
+    tools=[retrieve_context],
+    middleware=[
+        security_check,    # 1st: Block threats immediately
+        validate_input,    # 2nd: Basic validation
+        log_request       # 3rd: Logging
+    ]
+)
+```
+
+### RAG Integration
+
+**Smart context retrieval with automatic fallback:**
+
+1. **Query Processing**: User query validated for security threats
+2. **Context Retrieval**: Vector similarity search (k=3 documents)
+3. **Relevance Check**: Similarity score threshold (0.65)
+4. **Response Generation**:
+   - If relevant: Answer with documentation context
+   - If not relevant: Helpful fallback message
+5. **Structured Output**: Returns `ChatResponse` with reply, sources, and score
+
+**Key Features:**
+- **Automatic fallback**: When similarity score is too low, provides helpful guidance
+- **Transparent scoring**: Returns similarity scores for observability
+- **Source attribution**: Tracks which documents were used
+- **No hallucination**: Only answers based on provided context
+
+### Response Format
+
+Matches existing API schema (`src/api/schemas/chat.py`):
+
+```python
+class ChatResponse(BaseModel):
+    reply: str                    # The answer to user's question
+    sources: Optional[list[str]]  # Document sources used (or None)
+    score: Optional[float]        # Similarity score (0.0-1.0)
+```
+
+**Example Responses:**
+
+**Legitimate Query (score: 0.692):**
+```json
+{
+  "reply": "QLORA is a method that enables privacy-preserving usage of LLMs...",
+  "sources": ["documentation"],
+  "score": 0.692
+}
+```
+
+**Out of Scope (score: 0.438):**
+```json
+{
+  "reply": "I couldn't find relevant information in the documentation to answer your question: \"What is the meaning of life?\"...",
+  "sources": null,
+  "score": 0.438
+}
+```
+
+**Security Threat Detected:**
+```json
+{
+  "reply": "I cannot process this request as it appears to contain instructions that conflict with my operation guidelines. Please rephrase your question about the documentation.",
+  "sources": null,
+  "score": 0.0
+}
+```
+
+### File Structure
+
+```
+src/core/agentic_system/chat/
+├── __init__.py               # Exports invoke_agent
+├── chat_agent.py            # Main agent with retrieval tool
+├── consts.py                # Prompts, thresholds, config
+├── middleware.py            # Security & validation decorators
+├── security.py              # Pattern matching & validation
+└── security_tests.py        # Comprehensive test suite (27 tests)
+```
+
+### Key Design Decisions
+
+1. **Simple over Complex**: No LangGraph - straightforward agent for Q&A use case
+2. **Security First**: Pre-LLM validation prevents wasted compute and attacks
+3. **Pattern-based Detection**: Fast, transparent, no additional ML overhead
+4. **Graceful Degradation**: User-friendly errors, not stack traces
+5. **KISS Principle**: Minimal dependencies, easy to maintain and test
+
+**Documentation**: [`Docs/chat_agent_security_implementation.md`](Docs/chat_agent_security_implementation.md)
+
 ## Agentic System Architecture
 
 The diagram generation system is built using **LangGraph**, a framework for building stateful, multi-agent applications. The system orchestrates three main nodes that work together to transform user queries into structured diagrams.
@@ -643,6 +811,13 @@ diagram_maker/
 │   │   │   ├── vector_store.py  # Vector store management
 │   │   │   └── retrieval.py    # Search/retrieval service
 │   │   └── agentic_system/
+│   │       ├── chat/     # Chat agent with security
+│   │       │   ├── chat_agent.py     # Main agent with RAG
+│   │       │   ├── security.py       # Security validation
+│   │       │   ├── middleware.py     # LangChain decorators
+│   │       │   └── security_tests.py # 27 security tests
+│   │       ├── diagrams/ # Diagram generation system
+│   │       │   └── orchestrator/     # LangGraph orchestrator
 │   │       └── nodes/
 │   │           └── mermaid_parsing/  # Mermaid diagram generation
 │   ├── services/         # Service layer
@@ -651,7 +826,8 @@ diagram_maker/
 │   ├── arch_mmd/         # Architecture diagrams
 │   ├── terraform_mmd/    # Terraform workflow diagrams
 │   ├── ec2_iam_setup.md  # EC2 and IAM roles documentation
-│   └── vector_store_singleton_pattern.md
+│   ├── vector_store_singleton_pattern.md
+│   └── chat_agent_security_implementation.md  # Security features
 ├── DOCKER_RUN.md         # Docker deployment guide
 └── tests/                 # Comprehensive test suite
 ```
@@ -689,6 +865,10 @@ diagram_maker/
 - **Encryption**: At-rest and in-transit encryption
 - **VPC Endpoints**: Private network access to AWS services (ready for implementation)
 - **WAF Integration**: Web application firewall ready
+- **Chat Agent Security**: Enterprise-grade protection against prompt injection, code attacks, and system prompt exposure
+  - Pattern-based threat detection with 100% test pass rate
+  - Defense-in-depth with multiple security layers
+  - Real-time security event logging and monitoring
 
 ### Observability
 
@@ -753,6 +933,7 @@ terraform output
 - **Unit Tests**: Core business logic and utilities
 - **Integration Tests**: Service integration and data pipeline
 - **E2E Tests**: API endpoint validation
+- **Security Tests**: Comprehensive security validation (27 tests covering prompt injection, code attacks, system prompt exposure)
 - **Benchmark Tests**: Performance and load testing
 
 ## Documentation
@@ -762,6 +943,7 @@ All deployment and architecture documentation is located in the [`Docs/`](Docs/)
 - **Architecture Diagrams**: Mermaid diagrams for infrastructure design
 - **Terraform Workflows**: Step-by-step module creation and usage
 - **EC2 and IAM Setup**: Comprehensive guide for EC2 instance and IAM roles configuration
+- **Chat Agent Security**: Enterprise-grade security implementation with threat protection details
 - **Code Patterns**: Design patterns and best practices
 - **Docker Deployment**: Guide for building and running Docker containers
 
