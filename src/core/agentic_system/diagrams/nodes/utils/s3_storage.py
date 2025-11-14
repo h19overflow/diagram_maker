@@ -2,16 +2,12 @@
 S3 storage utilities for diagram persistence.
 
 This module handles uploading and retrieving Mermaid diagrams from S3
-for later retrieval and sharing. Also handles database persistence of diagram metadata.
+for later retrieval and sharing.
 """
 
 from src.boundary.s3_client import generate_presigned_url, request_via_presigned_url
-from src.boundary.database import get_session
-from src.boundary.repositories.diagram_repository import DiagramRepository
 from logging import getLogger
-from datetime import datetime
 from uuid import UUID
-import hashlib
 import re
 
 logger = getLogger(__name__)
@@ -168,49 +164,3 @@ def get_mermaid_from_s3(s3_key: str) -> str | None:
     except Exception as s3_error:
         logger.warning(f"Failed to retrieve Mermaid diagram from S3: {s3_error}")
         return None
-
-
-def save_diagram_to_database(
-    user_id: UUID,
-    diagram_id: UUID,
-    s3_path: str,
-    title: str,
-    user_query: str,
-    mermaid_code: str,
-    description: str = None,
-    status: str = "draft"
-) -> bool:
-    """
-    Save diagram metadata to database.
-
-    Args:
-        user_id: User UUID (foreign key)
-        diagram_id: Diagram UUID (primary key)
-        s3_path: Full S3 path to the .mmd file
-        title: Diagram title
-        user_query: Original user query
-        mermaid_code: Generated Mermaid code
-        description: Optional description
-        status: Diagram status (default: "draft")
-
-    Returns:
-        True if save successful, False otherwise
-    """
-    try:
-        with get_session() as session:
-            diagram_repo = DiagramRepository(session)
-            diagram = diagram_repo.create_diagram(
-                user_id=user_id,
-                diagram_id=diagram_id,
-                s3_path=s3_path,
-                title=title,
-                user_query=user_query,
-                mermaid_code=mermaid_code,
-                description=description,
-                status=status
-            )
-            logger.info(f"Diagram {diagram.diagram_id} saved to database for user {user_id}")
-            return True
-    except Exception as db_error:
-        logger.error(f"Failed to save diagram to database: {db_error}")
-        return False

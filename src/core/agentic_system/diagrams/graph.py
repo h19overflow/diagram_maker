@@ -8,6 +8,7 @@ This graph orchestrates the flow from user input to final diagram:
 4. Mermaid Generation Node - Converts final diagram to Mermaid syntax
 5. Mermaid File Save Node - Saves Mermaid diagram to local file
 6. Mermaid S3 Upload Node - Uploads Mermaid diagram to S3 for later retrieval
+7. Database Persistence Node - Persists diagram metadata to database
 """
 
 from langgraph.graph import StateGraph, END
@@ -18,6 +19,7 @@ from src.core.agentic_system.diagrams.nodes.helper_populating_node import helper
 from src.core.agentic_system.diagrams.nodes.mermaid_generation_node import mermaid_generation_node
 from src.core.agentic_system.diagrams.nodes.mermaid_file_save_node import mermaid_file_save_node
 from src.core.agentic_system.diagrams.nodes.mermaid_s3_upload_node import mermaid_s3_upload_node
+from src.core.agentic_system.diagrams.nodes.database_persistence_node import database_persistence_node
 from logging import getLogger
 
 logger = getLogger(__name__)
@@ -40,6 +42,7 @@ def create_diagram_graph() -> StateGraph:
     workflow.add_node("mermaid_generation", mermaid_generation_node)
     workflow.add_node("mermaid_file_save", mermaid_file_save_node)
     workflow.add_node("mermaid_s3_upload", mermaid_s3_upload_node)
+    workflow.add_node("database_persistence", database_persistence_node)
 
     # Set entry point
     workflow.set_entry_point("diagram_sketch")
@@ -50,7 +53,8 @@ def create_diagram_graph() -> StateGraph:
     workflow.add_edge("helper_populating", "mermaid_generation")
     workflow.add_edge("mermaid_generation", "mermaid_file_save")
     workflow.add_edge("mermaid_file_save", "mermaid_s3_upload")
-    workflow.add_edge("mermaid_s3_upload", END)
+    workflow.add_edge("mermaid_s3_upload", "database_persistence")
+    workflow.add_edge("database_persistence", END)
 
     # Compile the graph
     app = workflow.compile()

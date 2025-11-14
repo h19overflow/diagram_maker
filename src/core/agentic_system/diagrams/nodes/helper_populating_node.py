@@ -1,4 +1,4 @@
-from src.core.agentic_system.diagrams.nodes.utils import populate_node_description
+from src.core.agentic_system.diagrams.nodes.utils.node_utils import populate_node_description
 from src.core.agentic_system.respone_formats import (
     Nodes,
     Edges,

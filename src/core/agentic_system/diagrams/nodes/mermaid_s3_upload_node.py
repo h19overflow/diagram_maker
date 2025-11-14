@@ -1,16 +1,11 @@
 """
 Mermaid S3 upload node.
 
-This node uploads the Mermaid diagram to S3 for later retrieval
-and persists diagram metadata to the database.
+This node uploads the Mermaid diagram to S3 for later retrieval.
+Single responsibility: S3 upload only.
 """
 
-from src.core.agentic_system.diagrams.nodes.s3_storage import (
-    upload_mermaid_to_s3,
-    save_diagram_to_database,
-    extract_title_from_user_input,
-    extract_description_from_mermaid
-)
+from src.core.agentic_system.diagrams.nodes.utils.s3_storage import upload_mermaid_to_s3
 from logging import getLogger
 from uuid import uuid4, UUID
 
@@ -19,10 +14,13 @@ logger = getLogger(__name__)
 
 def mermaid_s3_upload_node(state) -> dict:
     """
-    Upload Mermaid diagram to S3 and persist metadata to database.
+    Upload Mermaid diagram to S3.
+
+    Single responsibility: Upload diagram to S3 and generate diagram_id.
+    Database persistence is handled by a separate node.
 
     Args:
-        state: GraphState containing mermaid_diagram, user_input, user_id, diagram_id
+        state: GraphState containing mermaid_diagram, user_id, diagram_id (optional)
 
     Returns:
         Updated state with mermaid_s3_key and diagram_id
@@ -33,9 +31,6 @@ def mermaid_s3_upload_node(state) -> dict:
             state.get("mermaid_diagram")
             if isinstance(state, dict)
             else state.mermaid_diagram
-        )
-        user_input = (
-            state.get("user_input") if isinstance(state, dict) else state.user_input
         )
         user_id_str = (
             state.get("user_id") if isinstance(state, dict) else state.user_id
@@ -87,28 +82,6 @@ def mermaid_s3_upload_node(state) -> dict:
             }
 
         logger.info(f"Mermaid diagram uploaded to S3: {mermaid_s3_key}")
-
-        # Extract title and description for database
-        title = extract_title_from_user_input(user_input)
-        description = extract_description_from_mermaid(mermaid_diagram)
-
-        # Save diagram metadata to database
-        db_save_success = save_diagram_to_database(
-            user_id=user_id,
-            diagram_id=diagram_id,
-            s3_path=mermaid_s3_key,
-            title=title,
-            user_query=user_input if user_input else "",
-            mermaid_code=mermaid_diagram,
-            description=description,
-            status="draft"
-        )
-
-        if not db_save_success:
-            logger.warning(
-                f"Database save failed for diagram {diagram_id}, but S3 upload succeeded. "
-                "Continuing with pipeline."
-            )
 
         # Return updated state with both S3 key and diagram_id
         return {
