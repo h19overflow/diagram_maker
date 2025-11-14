@@ -22,3 +22,13 @@ class GraphRenderRequest(BaseModel):
 class GraphRenderResponse(BaseModel):
     svg: str
 
+
+class GenerateDiagramRequest(BaseModel):
+    user_input: str = Field(..., description="User query for diagram generation")
+
+
+class GenerateDiagramResponse(BaseModel):
+    mermaid_diagram: str = Field(..., description="Generated Mermaid diagram")
+    mermaid_filepath: Optional[str] = Field(None, description="Path where diagram was saved")
+    error_message: Optional[str] = Field(None, description="Error message if generation failed")
+

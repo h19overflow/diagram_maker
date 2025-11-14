@@ -1,6 +1,5 @@
 from fastapi import APIRouter
 from src.api.schemas.chat import ChatRequest, ChatResponse
-from src.api.schemas.drafts import GenerateDraftRequest, GenerateDraftResponse
 from src.core.agentic_system.artist_mode import invoke_artist_mode, invoke_chat_only
 import logging
 
@@ -48,12 +47,3 @@ async def chat_request(request: ChatRequest):
             sources=None,
             score=0.0,
         )
-
-
-@router.post("/generate-draft", response_model=GenerateDraftResponse)
-async def generate_draft(request: GenerateDraftRequest):
-    return GenerateDraftResponse(
-        draft_id="draft_123",
-        mermaid="graph TD\n    A[Start] --> B[End]",
-        summary="Sample draft",
-    )

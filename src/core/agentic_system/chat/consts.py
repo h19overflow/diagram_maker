@@ -8,7 +8,7 @@ This module contains:
 """
 
 # Similarity threshold for determining if retrieved context is relevant
-SIMILARITY_THRESHOLD = 0.65
+SIMILARITY_THRESHOLD = 0.5
 
 # Model configuration
 MODEL_NAME = "google_genai:gemini-2.5-flash-lite"

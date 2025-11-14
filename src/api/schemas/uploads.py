@@ -27,3 +27,9 @@ class PresignResponse(BaseModel):
             url=url, key=key, headers=headers or {"Content-Type": mime}, file_extension=ext
         )
 
+
+class IngestPDFResponse(BaseModel):
+    message: str = Field(..., description="Success message")
+    file_path: str = Field(..., description="Path where PDF was saved")
+    chunks_ingested: int = Field(default=0, description="Number of document chunks ingested")
+
