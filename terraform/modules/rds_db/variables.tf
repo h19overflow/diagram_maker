@@ -9,8 +9,8 @@ variable "environment" {
 # Database Engine Configuration
 variable "db_engine_version" {
   type        = string
-  description = "PostgreSQL engine version"
-  default     = "16.1"
+  description = "PostgreSQL engine version (AWS RDS format, e.g., 16.11, 17.6)"
+  default     = "16.11"
 }
 
 variable "db_instance_class" {

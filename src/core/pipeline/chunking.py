@@ -5,7 +5,8 @@ from __future__ import annotations
 from typing import List
 
 from langchain_core.documents import Document
-from langchain_text_splitters import TokenTextSplitter
+from langchain_experimental.text_splitter import SemanticChunker
+from langchain_aws import BedrockEmbeddings
 from logging import getLogger
 from tqdm import tqdm
 import tiktoken
@@ -27,13 +28,16 @@ def _count_tokens(text: str, encoding_name: str = "cl100k_base") -> int:
         return len(text) // 4
 
 
-def _build_text_splitter(options: RAGConfig) -> TokenTextSplitter:
-    # Use TokenTextSplitter for accurate token-based chunking
-    # cl100k_base is used by GPT-4 and is a good general-purpose tokenizer
-    return TokenTextSplitter(
-        chunk_size=options.CHUNK_SIZE,
-        chunk_overlap=options.CHUNK_OVERLAP,
-        encoding_name="cl100k_base",
+def _build_text_splitter(options: RAGConfig) -> SemanticChunker:
+    """Build a SemanticChunker with Bedrock embeddings and 80th percentile breakpoint."""
+    embeddings = BedrockEmbeddings(
+        model_id=options.BEDROCK_EMBEDDING_MODEL_ID,
+        region_name=options.BEDROCK_REGION
+    )
+    return SemanticChunker(
+        embeddings=embeddings,
+        breakpoint_threshold_type="percentile",
+        breakpoint_threshold_amount=95.0  # 80th percentile
     )
 
 
@@ -106,7 +110,7 @@ def chunk_documents(documents: List[Document]) -> List[Document]:
         splitter = _build_text_splitter(config)
 
         # Show progress while chunking documents
-        logger.info(f"Chunking {len(documents)} documents (target size: {config.CHUNK_SIZE} tokens, min: {config.MIN_CHUNK_SIZE} tokens)")
+        logger.info(f"Chunking {len(documents)} documents using semantic chunking (80th percentile breakpoint, min: {config.MIN_CHUNK_SIZE} tokens)")
         with tqdm(total=len(documents), desc="Chunking documents", unit="doc") as pbar:
             split_docs = splitter.split_documents(documents)
             pbar.update(len(documents))

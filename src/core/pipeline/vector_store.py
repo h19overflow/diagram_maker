@@ -353,7 +353,7 @@ if __name__ == "__main__":
 
     print("Starting vector store creation")
     vector_store = get_vector_store()
-    documents = load_document(r"data\React_paper.pdf")
+    documents = load_document(r"data\QLORA.pdf")
     chunked_docs = chunk_documents(documents)
     print("Chunking documents")
     with open('chunked_docs.txt', "w") as f:

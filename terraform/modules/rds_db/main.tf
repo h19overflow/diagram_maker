@@ -119,7 +119,8 @@ resource "aws_db_instance" "diagram_maker_db" {
   # Performance and Monitoring
   parameter_group_name           = aws_db_parameter_group.diagram_maker_db_params.name
   enabled_cloudwatch_logs_exports = ["postgresql", "upgrade"]  # Export logs to CloudWatch
-  monitoring_interval            = 60  # Enhanced monitoring every 60 seconds
+  # Enhanced monitoring: only enable if monitoring_role_arn is provided
+  monitoring_interval            = var.monitoring_role_arn != "" ? 60 : 0  # 0 = disabled, 60 = every 60 seconds
   monitoring_role_arn            = var.monitoring_role_arn != "" ? var.monitoring_role_arn : null
   performance_insights_enabled   = var.enable_performance_insights
 
