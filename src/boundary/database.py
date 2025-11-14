@@ -34,8 +34,8 @@ class DatabaseConfig(BaseSettings):
     DB_PASSWORD: str = Field(default="postgres", description="Database password")
     @property
     def database_url(self) -> str:
-        """Construct PostgreSQL connection URL"""
-        return f"postgresql://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
+        """Construct PostgreSQL connection URL with psycopg2 driver"""
+        return f"postgresql+psycopg2://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
 
 
 # Initialize database config
@@ -102,8 +102,27 @@ def init_db():
     Initialize database connection and verify it's working.
     Call this at application startup.
     """
+    try:
+        if check_connection():
+            logger.info(f"Database connection established to {db_config.DB_HOST}:{db_config.DB_PORT}/{db_config.DB_NAME}")
+        else:
+            logger.error("Failed to establish database connection")
+            raise ConnectionError("Cannot connect to database")
+    except SQLAlchemyError as e:
+        logger.error(f"Database connection check failed: {e}")
+        raise ConnectionError("Cannot connect to database") from e
+
+if __name__ == "__main__":
+    import sys
+    # Configure basic logging to see output
+    import logging
+    logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
+
+    print(f"Attempting to connect to: {db_config.DB_HOST}:{db_config.DB_PORT}/{db_config.DB_NAME}")
+    print(f"Connection string: postgresql+psycopg2://{db_config.DB_USER}:***@{db_config.DB_HOST}:{db_config.DB_PORT}/{db_config.DB_NAME}")
+
     if check_connection():
-        logger.info(f"Database connection established to {db_config.DB_HOST}:{db_config.DB_PORT}/{db_config.DB_NAME}")
+        print("✅ Database connection successful!")
     else:
-        logger.error("Failed to establish database connection")
-        raise ConnectionError("Cannot connect to database")
+        print("❌ Database connection failed!")
+        sys.exit(1)

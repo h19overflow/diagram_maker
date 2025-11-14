@@ -25,10 +25,12 @@ class GraphRenderResponse(BaseModel):
 
 class GenerateDiagramRequest(BaseModel):
     user_input: str = Field(..., description="User query for diagram generation")
+    user_id: str = Field(..., description="User ID from browser localStorage (UUID format)")
 
 
 class GenerateDiagramResponse(BaseModel):
     mermaid_diagram: str = Field(..., description="Generated Mermaid diagram")
     mermaid_filepath: Optional[str] = Field(None, description="Path where diagram was saved")
+    diagram_id: Optional[str] = Field(None, description="UUID of the created diagram in database")
     error_message: Optional[str] = Field(None, description="Error message if generation failed")
 

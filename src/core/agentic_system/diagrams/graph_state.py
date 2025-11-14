@@ -6,6 +6,8 @@ from langchain_core.documents import Document
 
 class GraphState(BaseModel):
     user_input: Optional[str] = Field(description="The user input",default=None)
+    user_id: Optional[str] = Field(description="User ID from browser localStorage (UUID format)",default=None)
+    diagram_id: Optional[str] = Field(description="Generated diagram ID (UUID format)",default=None)
     context_docs: Optional[Dict[str, List[Document]]] = Field(
         description="The context documents as a dictionary mapping titles to documents",default=None
     )

@@ -36,26 +36,29 @@ class DiagramRepository:
         title: str,
         user_query: str,
         mermaid_code: str,
+        diagram_id: Optional[UUID] = None,
         description: Optional[str] = None,
         status: str = "draft"
     ) -> Diagram:
         """
         Create a new diagram.
-        
+
         Args:
             user_id: User UUID (foreign key)
             s3_path: Full S3 path to the .mmd file
             title: Diagram title
             user_query: Original user query that generated this diagram
             mermaid_code: Generated Mermaid code
+            diagram_id: Optional diagram UUID (if None, database will generate one)
             description: Optional diagram description
             status: Diagram status (draft, published, archived)
-            
+
         Returns:
             Created Diagram object
         """
         try:
             diagram = Diagram(
+                diagram_id=diagram_id,
                 user_id=user_id,
                 s3_path=s3_path,
                 title=title,
