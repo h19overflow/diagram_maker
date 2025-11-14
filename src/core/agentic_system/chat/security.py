@@ -18,15 +18,15 @@ logger = logging.getLogger(__name__)
 PROMPT_INJECTION_PATTERNS = [
     # Direct instruction override
     r"ignore\s+(all\s+)?(previous|above|prior)\s+(instructions|prompts|rules|directions)",
-    r"disregard\s+(all\s+)?(previous|above|prior)\s+(instructions|prompts|rules)",
-    r"forget\s+(all\s+)?(previous|above|prior)\s+(instructions|prompts|rules)",
+    r"disregard\s+(all\s+)?(previous|above|prior)?\s*(instructions|prompts|rules|directions)",
+    r"forget\s+(all\s+)?(your\s+)?(previous|above|prior)?\s*(instructions|prompts|rules|guidelines)",
     r"override\s+(all\s+)?(previous|system|prior)\s+(instructions|prompts|rules)",
     # Role-playing attacks
     r"you\s+are\s+now\s+(a\s+)?(?!a\s+helpful)",
     r"pretend\s+(you\s+are|to\s+be)",
-    r"act\s+as\s+(if\s+)?(you\s+are|a)",
+    r"act\s+as\s+(if\s+)?(?:you\s+)?",
     r"roleplay\s+as",
-    r"simulate\s+(being\s+)?a",
+    r"simulate\s+(being\s+)?(?:a\s+)?",
     # Delimiter injection
     r"---\s*end\s+(of\s+)?(instructions|prompt|system)",
     r"<\s*/\s*system\s*>",
@@ -49,11 +49,12 @@ PROMPT_INJECTION_PATTERNS = [
 # Code injection patterns
 CODE_INJECTION_PATTERNS = [
     # SQL injection
-    r"(?:union|select|insert|update|delete|drop|create|alter)\s+(?:all\s+)?(?:from|into|table|database)",
+    r"(?:union\s+select|select\s+.+\s+from|insert\s+into|update\s+.+\s+set|delete\s+from|drop\s+table|create\s+table|alter\s+table)",
     r"';?\s*(?:drop|delete|truncate)\s+table",
     r"(?:or|and)\s+['\"]?1['\"]?\s*=\s*['\"]?1",
     # Command injection
     r"(?:;|\||&|`|\$\()\s*(?:ls|cat|rm|chmod|curl|wget|bash|sh|python|eval|exec)",
+    r"(?:ls|cat|rm|grep|chmod|curl|wget)\s+[\-/]",
     r"(?:system|shell_exec|passthru|exec|popen)\s*\(",
     # XSS
     r"<\s*script[^>]*>",
@@ -73,11 +74,12 @@ CODE_INJECTION_PATTERNS = [
 SYSTEM_PROMPT_EXPOSURE_PATTERNS = [
     r"what\s+(is|are)\s+your\s+(base|core|system|initial)\s+(prompt|instruction)",
     r"show\s+(me\s+)?(?:your\s+)?(?:system\s+)?(?:prompt|instruction|rule)",
-    r"reveal\s+your\s+(?:system\s+)?(?:prompt|instruction|rule)",
+    r"reveal\s+(?:your\s+)?(?:system\s+)?(?:core\s+)?(?:prompt|instruction|rule)",
     r"describe\s+your\s+(?:system\s+)?(?:prompt|instruction|rule|guideline)",
     r"copy\s+(?:and\s+)?paste\s+your\s+(?:system\s+)?(?:prompt|instruction)",
     r"verbatim\s+(?:of\s+)?your\s+(?:system\s+)?(?:prompt|instruction)",
-    r"exact\s+(?:text|words)\s+(?:of\s+)?your\s+(?:system\s+)?(?:prompt|instruction)",
+    r"(?:exact|actual)\s+(?:text|words|wording)\s+(?:of\s+)?(?:your\s+)?(?:base\s+)?(?:prompt|instruction)",
+    r"tell\s+me\s+the\s+(?:exact|actual)\s+(?:text|words)",
 ]
 
 
