@@ -5,7 +5,7 @@ from langchain.agents import create_agent
 from langchain_core.documents import Document
 from typing import List
 from logging import getLogger
-from src.core.agentic_system.helpers.consts import get_system_prompt, get_user_prompt_template
+from src.core.agentic_system.diagrams.helpers.consts import get_system_prompt, get_user_prompt_template
 
 logger = getLogger(__name__)
 

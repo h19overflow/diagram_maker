@@ -8,10 +8,10 @@ This graph orchestrates the flow from user input to final diagram:
 """
 
 from langgraph.graph import StateGraph, END
-from src.core.agentic_system.graph_state import GraphState
-from src.core.agentic_system.nodes.diagram_sketch_node import diagram_sketch_node
-from src.core.agentic_system.nodes.retrieval_node import retrieval_node_sync
-from src.core.agentic_system.nodes.helper_populating_node import helper_populating_node
+from src.core.agentic_system.diagrams.graph_state import GraphState
+from src.core.agentic_system.diagrams.nodes.diagram_sketch_node import diagram_sketch_node
+from src.core.agentic_system.diagrams.nodes.retrieval_node import retrieval_node_sync
+from src.core.agentic_system.diagrams.nodes.helper_populating_node import helper_populating_node
 from logging import getLogger
 
 logger = getLogger(__name__)
@@ -55,7 +55,7 @@ if __name__ == "__main__":
     Example usage of the diagram generation graph.
     Note: LangGraph outputs a dictionary even when initialized with a Pydantic BaseModel.
     """
-    from src.core.agentic_system.graph_state import GraphState
+    from src.core.agentic_system.diagrams.graph_state import GraphState
 
     # Create initial state with user input
     initial_state = GraphState(

@@ -2,11 +2,11 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain.agents import create_agent
 from src.core.agentic_system.respone_formats import NodeTitles
 import logging
-from src.core.agentic_system.orchestrator.validate_structure import (
+from src.core.agentic_system.diagrams.orchestrator.validate_structure import (
     validate_hierarchical_structure,
     validate_node_count,
 )
-from src.core.agentic_system.orchestrator.consts import MAX_NODES, get_system_prompt, get_user_prompt_template
+from src.core.agentic_system.diagrams.orchestrator.consts import MAX_NODES, get_system_prompt, get_user_prompt_template
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

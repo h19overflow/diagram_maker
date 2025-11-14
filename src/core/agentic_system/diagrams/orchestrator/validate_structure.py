@@ -1,5 +1,5 @@
 import logging
-from src.core.agentic_system.orchestrator.consts import MAX_NODES, QUESTION_MARKERS
+from src.core.agentic_system.diagrams.orchestrator.consts import MAX_NODES, QUESTION_MARKERS
 
 def validate_hierarchical_structure(nodes: list) -> bool:
     """Validate hierarchical node structure for correctness"""

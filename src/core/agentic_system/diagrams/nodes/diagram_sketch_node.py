@@ -1,6 +1,6 @@
-from src.core.agentic_system.graph_state import GraphState
-from src.core.agentic_system.nodes.utils import validate_query_relevance
-from src.core.agentic_system.orchestrator.orchestrotor_agent import invoke_agent
+from src.core.agentic_system.diagrams.graph_state import GraphState
+from src.core.agentic_system.diagrams.nodes.utils import validate_query_relevance
+from src.core.agentic_system.diagrams.orchestrator.orchestrotor_agent import invoke_agent
 from logging import getLogger
 import asyncio
 

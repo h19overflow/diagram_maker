@@ -1,10 +1,10 @@
-from src.core.agentic_system.nodes.utils import populate_node_description
+from src.core.agentic_system.diagrams.nodes.utils import populate_node_description
 from src.core.agentic_system.respone_formats import (
     Nodes,
     Edges,
     IRSDiagramResponse,
 )
-from src.core.agentic_system.nodes.mermaid_parsing import (
+from src.core.agentic_system.diagrams.nodes.mermaid_parsing import (
     parse_to_flowchart,
     save_mermaid_to_file,
 )

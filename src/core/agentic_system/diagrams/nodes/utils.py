@@ -2,7 +2,7 @@
 Utility functions for node operations.
 """
 
-from src.core.agentic_system.helpers.helper_agent import invoke_agent
+from src.core.agentic_system.diagrams.helpers.helper_agent import invoke_agent
 from src.core.agentic_system.respone_formats import HierarchicalNodeTitle
 from langchain_core.documents import Document
 from src.core.pipeline.vector_store import vector_store

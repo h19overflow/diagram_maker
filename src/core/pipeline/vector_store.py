@@ -19,8 +19,8 @@ load_dotenv()
 # Configure logging if not already configured
 basicConfig(
     level=INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S'
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
 )
 
 logger = getLogger(__name__)
@@ -30,7 +30,7 @@ class VectorStore:
     def __init__(self, persist_directory: Optional[str] = None):
         """
         Initialize the vector store with persistence support.
-        
+
         Args:
             persist_directory: Optional directory path to persist the vector store.
                               If None, uses VECTOR_STORE_PATH from config.
@@ -46,14 +46,16 @@ class VectorStore:
         # Determine persistence path
         if persist_directory is None:
             persist_directory = self.config.VECTOR_STORE_PATH
-        
+
         self.persist_directory = Path(persist_directory)
         self.persist_directory.mkdir(parents=True, exist_ok=True)
-        
+
         # Try to load existing vector store, otherwise will create on first document addition
         self.vector_store = self._load_or_create_vector_store()
         if self.vector_store is None:
-            logger.info(f"Vector store will be created at: {self.persist_directory} on first document addition")
+            logger.info(
+                f"Vector store will be created at: {self.persist_directory} on first document addition"
+            )
         else:
             logger.info(f"Vector store initialized at: {self.persist_directory}")
 
@@ -61,19 +63,21 @@ class VectorStore:
         """Load existing vector store from disk or return None to create new one."""
         index_path = self.persist_directory / "index.faiss"
         docstore_path = self.persist_directory / "index.pkl"
-        
+
         try:
             if index_path.exists() and docstore_path.exists():
                 logger.info("Loading existing vector store from disk")
                 vector_store = FAISS.load_local(
                     str(self.persist_directory),
                     self.embeddings,
-                    allow_dangerous_deserialization=True
+                    allow_dangerous_deserialization=True,
                 )
                 logger.info("Successfully loaded existing vector store")
                 return vector_store
             else:
-                logger.info("No existing vector store found, will create on first document addition")
+                logger.info(
+                    "No existing vector store found, will create on first document addition"
+                )
                 return None
         except Exception as e:
             logger.warning(f"Error loading vector store, will create new one: {e}")
@@ -83,8 +87,7 @@ class VectorStore:
         """Save the vector store to disk."""
         try:
             self.vector_store.save_local(
-                str(self.persist_directory),
-                index_name="index"
+                str(self.persist_directory), index_name="index"
             )
             logger.info(f"Vector store saved to {self.persist_directory}")
         except Exception as e:
@@ -105,13 +108,17 @@ class VectorStore:
                 return
 
             total_docs = len(documents)
-            logger.info(f"Starting to add {total_docs} documents to vector store (batch_size={batch_size})")
+            logger.info(
+                f"Starting to add {total_docs} documents to vector store (batch_size={batch_size})"
+            )
 
             # Create vector store if it doesn't exist yet
             if self.vector_store is None:
                 logger.info("Creating new vector store with documents")
                 # Embed all documents first in batches
-                logger.info(f"Embedding documents in batches (batch_size={batch_size})...")
+                logger.info(
+                    f"Embedding documents in batches (batch_size={batch_size})..."
+                )
                 texts = [doc.page_content for doc in documents]
                 embeddings = self._embed_documents_in_batches(texts, batch_size)
 
@@ -121,11 +128,12 @@ class VectorStore:
                 index = faiss.IndexFlatL2(embedding_dim)
 
                 # Convert embeddings to numpy array
-                embeddings_array = np.array(embeddings).astype('float32')
+                embeddings_array = np.array(embeddings).astype("float32")
                 index.add(embeddings_array)
 
                 # Create FAISS vector store with the index and documents
                 from langchain_community.docstore.in_memory import InMemoryDocstore
+
                 docstore = InMemoryDocstore()
                 index_to_docstore_id = {}
 
@@ -138,24 +146,30 @@ class VectorStore:
                     embedding_function=self.embeddings,
                     index=index,
                     docstore=docstore,
-                    index_to_docstore_id=index_to_docstore_id
+                    index_to_docstore_id=index_to_docstore_id,
                 )
 
                 logger.info(f"Vector store created with {len(documents)} documents")
             else:
                 # Add to existing store in batches
                 logger.info("Adding documents to existing vector store")
-                self._add_documents_in_batches(documents, batch_size, start_idx=0, total=total_docs)
+                self._add_documents_in_batches(
+                    documents, batch_size, start_idx=0, total=total_docs
+                )
 
             # Persist after adding documents
             logger.info("Saving vector store to disk...")
             self._save_vector_store()
-            logger.info(f"Successfully added {total_docs} documents to vector store and persisted")
+            logger.info(
+                f"Successfully added {total_docs} documents to vector store and persisted"
+            )
         except Exception as e:
             logger.error(f"Error adding documents: {e}")
             raise e
 
-    def _embed_documents_in_batches(self, texts: List[str], batch_size: int = 100) -> List[List[float]]:
+    def _embed_documents_in_batches(
+        self, texts: List[str], batch_size: int = 100
+    ) -> List[List[float]]:
         """
         Embed documents in batches sequentially.
 
@@ -173,11 +187,13 @@ class VectorStore:
 
         with tqdm(total=len(texts), desc="Embedding documents", unit="doc") as pbar:
             for i in range(0, len(texts), batch_size):
-                batch_texts = texts[i:i + batch_size]
+                batch_texts = texts[i : i + batch_size]
                 batch_num = (i // batch_size) + 1
 
                 try:
-                    logger.info(f"Embedding batch {batch_num}/{num_batches} ({len(batch_texts)} documents)...")
+                    logger.info(
+                        f"Embedding batch {batch_num}/{num_batches} ({len(batch_texts)} documents)..."
+                    )
                     batch_embeddings = self.embeddings.embed_documents(batch_texts)
                     all_embeddings.extend(batch_embeddings)
                     pbar.update(len(batch_texts))
@@ -189,23 +205,38 @@ class VectorStore:
         logger.info(f"Successfully embedded {len(all_embeddings)} documents")
         return all_embeddings
 
-    def _add_documents_in_batches(self, documents: List[Document], batch_size: int, start_idx: int = 0, total: int = 0):
+    def _add_documents_in_batches(
+        self,
+        documents: List[Document],
+        batch_size: int,
+        start_idx: int = 0,
+        total: int = 0,
+    ):
         """Add documents in batches with progress logging."""
         num_batches = (len(documents) + batch_size - 1) // batch_size
 
         # Create overall progress bar
-        with tqdm(total=len(documents), desc="Adding documents", unit="doc", initial=start_idx) as overall_pbar:
+        with tqdm(
+            total=len(documents), desc="Adding documents", unit="doc", initial=start_idx
+        ) as overall_pbar:
             for i in range(0, len(documents), batch_size):
-                batch = documents[i:i + batch_size]
+                batch = documents[i : i + batch_size]
                 batch_num = (i // batch_size) + 1
                 current_idx = start_idx + i
 
-                logger.info(f"Processing batch {batch_num}/{num_batches} ({len(batch)} documents, "
-                           f"total progress: {current_idx + len(batch)}/{total})...")
+                logger.info(
+                    f"Processing batch {batch_num}/{num_batches} ({len(batch)} documents, "
+                    f"total progress: {current_idx + len(batch)}/{total})..."
+                )
 
                 try:
                     # Show batch progress
-                    with tqdm(total=len(batch), desc=f"Batch {batch_num}/{num_batches}", unit="doc", leave=False) as batch_pbar:
+                    with tqdm(
+                        total=len(batch),
+                        desc=f"Batch {batch_num}/{num_batches}",
+                        unit="doc",
+                        leave=False,
+                    ) as batch_pbar:
                         self.vector_store.add_documents(batch)
                         batch_pbar.update(len(batch))
 
@@ -216,7 +247,6 @@ class VectorStore:
                     raise e
 
 
-
 # Singleton pattern with lazy initialization
 _vector_store_instance: Optional[VectorStore] = None
 
@@ -224,28 +254,28 @@ _vector_store_instance: Optional[VectorStore] = None
 def get_vector_store(persist_directory: Optional[str] = None) -> VectorStore:
     """
     Get or create the global VectorStore instance (singleton pattern).
-    
+
     This provides the benefits of a global variable (single instance, fast access)
     while being more flexible and testable:
     - Lazy initialization (only creates when first accessed)
     - Can be reset for testing
     - Thread-safe with proper locking if needed
-    
+
     Args:
         persist_directory: Optional directory path. Only used on first initialization.
                           Subsequent calls ignore this parameter.
-    
+
     Returns:
         The global VectorStore instance
     """
     global _vector_store_instance
-    
+
     if _vector_store_instance is None:
         logger.info("Initializing global VectorStore instance")
         _vector_store_instance = VectorStore(persist_directory=persist_directory)
     else:
         logger.debug("Returning existing VectorStore instance")
-    
+
     return _vector_store_instance
 
 
@@ -273,7 +303,7 @@ if __name__ == "__main__":
     documents = load_document(r"data\QLORA.pdf")
     chunked_docs = chunk_documents(documents)
     print("Chunking documents")
-    with open('chunked_docs.txt', "w") as f:
+    with open("chunked_docs.txt", "w") as f:
         for doc in chunked_docs:
             f.write(doc.page_content + "\n")
     print("Adding documents to vector store")
@@ -282,7 +312,9 @@ if __name__ == "__main__":
 
     # Use Retriever for search operations
     retriever = Retriever(vector_store.vector_store)
-    results = asyncio.run(retriever.search("What is the main idea of the document?", k=10))
-    with open('results.txt', "w") as f:
+    results = asyncio.run(
+        retriever.search("What is the main idea of the document?", k=10)
+    )
+    with open("results.txt", "w") as f:
         for result in results:
             f.write(result.page_content + "\n")

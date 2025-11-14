@@ -1,5 +1,5 @@
-from src.core.agentic_system.graph_state import GraphState
-from src.core.agentic_system.nodes.utils import search_for_node
+from src.core.agentic_system.diagrams.graph_state import GraphState
+from src.core.agentic_system.diagrams.nodes.utils import search_for_node
 from langchain_core.documents import Document
 from typing import Dict, List
 from logging import getLogger
