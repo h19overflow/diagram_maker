@@ -84,3 +84,43 @@ resource "aws_s3_bucket_cors_configuration" "diagram_maker_kb" {
   }
 }
 
+# Bucket policy to allow IAM principals to access the bucket via presigned URLs
+# This is required for presigned URLs to work - the bucket policy must allow
+# the IAM user/role that generates the presigned URL to perform the operations
+resource "aws_s3_bucket_policy" "diagram_maker_kb" {
+  bucket = aws_s3_bucket.diagram_maker_kb.id
+  depends_on = [aws_s3_bucket_public_access_block.diagram_maker_kb]
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "AllowIAMPrincipalsPresignedURLs"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+        }
+        Action = [
+          "s3:GetObject",
+          "s3:PutObject",
+          "s3:DeleteObject"
+        ]
+        Resource = "${aws_s3_bucket.diagram_maker_kb.arn}/*"
+      },
+      {
+        Sid    = "AllowIAMPrincipalsListBucket"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+        }
+        Action = [
+          "s3:ListBucket"
+        ]
+        Resource = aws_s3_bucket.diagram_maker_kb.arn
+      }
+    ]
+  })
+}
+
+data "aws_caller_identity" "current" {}
+
