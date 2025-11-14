@@ -381,6 +381,64 @@ src/core/agentic_system/chat/
 
 **Documentation**: [`Docs/chat_agent_security_implementation.md`](Docs/chat_agent_security_implementation.md)
 
+### Artist Mode - Parallel Chat + Diagram Generation
+
+**Vision**: Provide users with both textual answers AND visual representations simultaneously, making complex information easier to understand.
+
+**How it Works:**
+
+When `artist_mode=True`, the system executes both chat agent and diagram generation **in parallel** using `asyncio` and `ThreadPoolExecutor`:
+
+```mermaid
+flowchart LR
+    User[User Query<br/>artist_mode=true] --> Orchestrator[Artist Mode Orchestrator]
+
+    Orchestrator -->|Parallel Execution| Chat[Chat Agent]
+    Orchestrator -->|Parallel Execution| Diagram[Diagram Generation]
+
+    Chat -->|Text Answer| Combiner[Combine Results]
+    Diagram -->|Visual Diagram| Combiner
+
+    Combiner --> Response[ChatResponse<br/>reply + graphs]
+
+    style Orchestrator fill:#9C27B0
+    style Chat fill:#4CAF50
+    style Diagram fill:#2196F3
+    style Response fill:#FF9800
+```
+
+**API Usage:**
+
+```json
+// Request
+{
+  "message": "What is QLoRA and how does it work?",
+  "artist_mode": true
+}
+
+// Response
+{
+  "reply": "QLoRA is a finetuning technique that significantly reduces...",
+  "sources": ["documentation"],
+  "score": 0.697,
+  "graphs": [{
+    "type": "concept",
+    "mermaid": "flowchart TD\n    node_001[What is QLoRA?]..."
+  }]
+}
+```
+
+**Performance Benefits:**
+- **Parallel Execution**: Chat and diagram generation run simultaneously (not sequentially)
+- **Faster Response Time**: ~5 seconds instead of ~10 seconds for both operations
+- **Non-Blocking**: Uses async/await pattern for optimal FastAPI performance
+- **Error Isolation**: If diagram generation fails, chat response still returns
+
+**Implementation:**
+- **Orchestrator**: `src/core/agentic_system/artist_mode.py`
+- **FastAPI Integration**: `src/api/chat/chat_request.py`
+- **Mode Selection**: Controlled by `artist_mode` boolean in `ChatRequest`
+
 ## Agentic System Architecture
 
 The diagram generation system is built using **LangGraph**, a framework for building stateful, multi-agent applications. The system orchestrates three main nodes that work together to transform user queries into structured diagrams.
@@ -811,6 +869,7 @@ diagram_maker/
 │   │   │   ├── vector_store.py  # Vector store management
 │   │   │   └── retrieval.py    # Search/retrieval service
 │   │   └── agentic_system/
+│   │       ├── artist_mode.py        # Parallel chat + diagram orchestrator
 │   │       ├── chat/     # Chat agent with security
 │   │       │   ├── chat_agent.py     # Main agent with RAG
 │   │       │   ├── security.py       # Security validation
