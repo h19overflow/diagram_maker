@@ -114,12 +114,12 @@ The application runs on EC2 instances with secure IAM roles providing access to 
   - EBS root volume encryption enabled
 
 **IAM Roles and Policies:**
-- **Bedrock Policy**: Access to Amazon Titan Embeddings v2 and Nova LLM models
-  - Titan Embeddings v2 (`amazon.titan-embed-text-v2:0`) - 1024-dimensional embeddings
+- **Bedrock Policy**: Access to Amazon Bedrock Nova LLM models
   - Nova Lite (`amazon.nova-lite-v1:0`) - Lightweight LLM
   - Nova Pro (`amazon.nova-pro-v1:0`) - Advanced LLM
 - **S3 Policy**: Access to knowledge base bucket (GetObject, PutObject, DeleteObject, ListBucket)
 - **CloudWatch Logs Policy**: Full access for application logging
+- **Note**: Embeddings are handled via Google Generative AI (requires GOOGLE_API_KEY environment variable)
 
 **Key Benefits:**
 - No AWS credentials stored on instances
@@ -131,12 +131,10 @@ The application runs on EC2 instances with secure IAM roles providing access to 
 
 ### RAG Pipeline and Embeddings
 
-The application uses **Amazon Titan Embeddings v2** for vector-based document retrieval:
+The application uses **Google Generative AI Embeddings** for vector-based document retrieval:
 
 **Embedding Model:**
-- **Model**: Amazon Titan Embeddings v2 (`amazon.titan-embed-text-v2:0`)
-- **Dimensions**: 1024-dimensional vectors
-- **Multilingual Support**: Supports multiple languages including Arabic
+- **Model**: Google Generative AI Embeddings (`models/text-embedding-004`)
 - **Cloud-Based**: No local model files, reducing Docker image size and deployment complexity
 
 **Key Benefits:**
@@ -144,24 +142,24 @@ The application uses **Amazon Titan Embeddings v2** for vector-based document re
 - **Scalability**: Cloud-based embeddings scale automatically with demand
 - **Performance**: Optimized for production workloads with low latency
 - **Cost Efficiency**: Pay-per-use pricing model
-- **Maintenance**: AWS manages model updates and optimizations
+- **Maintenance**: Google manages model updates and optimizations
 
 **Chunking Strategy:**
-- **Target Chunk Size**: 4000 tokens
-- **Minimum Chunk Size**: 2048 tokens (chunks below this are merged)
-- **Overlap**: 300 tokens between chunks
-- **Optimization**: Chunking strategy optimized for Titan v2's 1024-dimensional embeddings
+- **Method**: Semantic chunking using `SemanticChunker` from LangChain Experimental
+- **Breakpoint**: 80th percentile threshold for semantic similarity
+- **Approach**: Chunks are created based on semantic boundaries rather than fixed token sizes
+- **Benefits**: More semantically coherent chunks that preserve context and meaning
 
 **Vector Store:**
 - **Storage**: FAISS (Facebook AI Similarity Search) index
-- **Embeddings**: Pre-computed using Titan v2 via parallel API calls
+- **Embeddings**: Pre-computed using Google Generative AI Embeddings via sequential batch processing
 - **Persistence**: Vector store saved to disk for fast reloading
 - **Search**: Similarity search with normalized scores (0-1 range)
 
 **Performance Optimizations:**
-- **Parallel Embedding**: Batch processing with concurrent API calls using ThreadPoolExecutor
+- **Batch Processing**: Sequential batch processing for embedding generation
 - **Progress Tracking**: tqdm progress bars for long-running operations
-- **Batch Processing**: Configurable batch sizes for optimal throughput
+- **Configurable Batch Sizes**: Adjustable batch sizes for optimal throughput
 
 ### Singleton Pattern for Vector Store
 
@@ -186,7 +184,7 @@ results = await vector_store.search("query", k=10)
 
 The codebase follows a clean separation between storage management and search functionality:
 
-- **Vector Store** (`src/core/pipeline/vector_store.py`): Handles document storage, embedding generation using Amazon Titan Embeddings v2, and FAISS index management
+- **Vector Store** (`src/core/pipeline/vector_store.py`): Handles document storage, embedding generation using Google Generative AI Embeddings, and FAISS index management
 - **Retrieval Service** (`src/core/pipeline/retrieval.py`): Handles search operations and query processing with similarity score normalization
 
 This separation provides:
@@ -196,8 +194,8 @@ This separation provides:
 - Better code organization
 
 **Embedding Generation:**
-- Uses `BedrockEmbeddings` from LangChain AWS integration
-- Parallel batch processing for efficient embedding generation
+- Uses `GoogleGenerativeAIEmbeddings` from LangChain Google GenAI integration
+- Sequential batch processing for efficient embedding generation
 - Automatic retry and error handling
 - Progress tracking with tqdm
 
@@ -205,14 +203,14 @@ This separation provides:
 from src.core.pipeline.vector_store import get_vector_store
 from src.core.pipeline.retrieval import Retriever
 
-# Initialize vector store with Titan Embeddings v2
+# Initialize vector store with Google Generative AI Embeddings
 vector_store = get_vector_store()
 vector_store.add_documents(documents)
 
-# Use retriever for search operations
+# Use retriever for search operations (sync methods)
 retriever = Retriever(vector_store.vector_store)
-results = await retriever.search("query", k=10)
-results_with_scores = await retriever.search_with_scores("query", k=10)
+results = retriever.search_sync("query", k=10)
+results_with_scores = retriever.search_with_scores_sync("query", k=10)
 ```
 
 ## Agentic System Architecture
@@ -225,27 +223,25 @@ The diagram generation system is built using **LangGraph**, a framework for buil
 flowchart TB
     Start([User Input]) --> Sketch[Diagram Sketch Node]
 
-    Sketch -->|Query Relevance Check| VectorStore[Vector Store<br/>FAISS + Titan Embeddings v2]
+    Sketch -->|Query Relevance Check| VectorStore[Vector Store<br/>FAISS + Google Embeddings]
     VectorStore -->|Similarity Scores<br/>0-1 Range| Sketch
 
     Sketch -->|Relevance Valid| Orchestrator[Orchestrator Agent<br/>Amazon Bedrock Nova Pro]
     Orchestrator -->|NodeTitles| Sketch
 
-    Sketch -->|Error?| EndError([Error State])
-    Sketch -->|Success| Retrieval[Retrieval Node]
+    Sketch --> Retrieval[Retrieval Node]
 
     Retrieval -->|Parallel Search| VectorStore2[Vector Store<br/>k=3 per node]
     VectorStore2 -->|Documents| Retrieval
-    Retrieval -->|context_docs| Helper[Helper Populating Node]
+    Retrieval --> Helper[Helper Populating Node]
 
     Helper -->|Parallel Description Gen| HelperAgent[Helper Agent<br/>Amazon Bedrock Nova Pro]
     HelperAgent -->|HelperResponse| Helper
 
-    Helper -->|IRSDiagramResponse + Mermaid| EndSuccess([Final Diagram])
+    Helper --> EndSuccess([Final Diagram<br/>IRSDiagramResponse + Mermaid])
 
     style Start fill:#4CAF50
     style EndSuccess fill:#4CAF50
-    style EndError fill:#F44336
     style Sketch fill:#2196F3
     style Retrieval fill:#FF9800
     style Helper fill:#9C27B0
@@ -338,17 +334,9 @@ stateDiagram-v2
     [*] --> Initial: user_input provided
 
     Initial --> DiagramSketch: Entry Point
-
-    DiagramSketch --> ErrorState: error_message set
     DiagramSketch --> Retrieval: diagram_skeleton set
-
-    Retrieval --> ErrorState: error_message set
     Retrieval --> HelperPopulating: context_docs set
-
-    HelperPopulating --> ErrorState: error_message set
     HelperPopulating --> Success: final_diagram set
-
-    ErrorState --> [*]
     Success --> [*]
 
     note right of DiagramSketch
@@ -356,12 +344,14 @@ stateDiagram-v2
         - Checks similarity scores (0-1)
         - Generates NodeTitles via
         Orchestrator Agent
+        - Errors handled internally
     end note
 
     note right of Retrieval
         - Parallel document retrieval
         - k=3 documents per node title
         - Builds context_docs dictionary
+        - Errors handled internally
     end note
 
     note right of HelperPopulating
@@ -369,6 +359,7 @@ stateDiagram-v2
         - Uses Helper Agent for each node
         - Builds Nodes, Edges, and
         IRSDiagramResponse
+        - Errors handled internally
     end note
 ```
 
@@ -388,44 +379,39 @@ sequenceDiagram
     User->>Graph: Invoke with user_input
     Graph->>Sketch: Execute diagram_sketch_node
 
-    Sketch->>VS: search_with_scores(query, k=10)
+    Sketch->>VS: search_with_scores_sync(query, k=10)
     VS-->>Sketch: results with normalized scores (0-1)
 
-    alt Relevance Check Passes
-        Sketch->>OA: invoke_agent(question)
-        OA-->>Sketch: NodeTitles (diagram_skeleton)
-        Sketch-->>Graph: {diagram_skeleton, error_message: None}
+    Sketch->>OA: invoke_agent(question)
+    OA-->>Sketch: NodeTitles (diagram_skeleton)
+    Sketch-->>Graph: {diagram_skeleton, error_message: None}
 
-        Graph->>Retrieval: Execute retrieval_node_sync
+    Graph->>Retrieval: Execute retrieval_node_sync
 
-        par Parallel Document Retrieval
-            Retrieval->>VS: search(node1.title, k=3)
-            Retrieval->>VS: search(node2.title, k=3)
-            Retrieval->>VS: search(nodeN.title, k=3)
-            VS-->>Retrieval: docs1
-            VS-->>Retrieval: docs2
-            VS-->>Retrieval: docsN
-        end
-
-        Retrieval-->>Graph: {context_docs: Dict[title: docs], error_message: None}
-
-        Graph->>Helper: Execute helper_populating_node
-
-        par Parallel Description Generation
-            Helper->>HA: invoke_agent(node1.title, docs1)
-            Helper->>HA: invoke_agent(node2.title, docs2)
-            Helper->>HA: invoke_agent(nodeN.title, docsN)
-            HA-->>Helper: HelperResponse1
-            HA-->>Helper: HelperResponse2
-            HA-->>Helper: HelperResponseN
-        end
-
-        Helper->>Helper: Build Nodes, Edges, IRSDiagramResponse
-        Helper-->>Graph: {final_diagram, error_message: None}
-
-    else Relevance Check Fails
-        Sketch-->>Graph: {error_message: "Low relevance"}
+    par Parallel Document Retrieval
+        Retrieval->>VS: search_sync(node1.title, k=3)
+        Retrieval->>VS: search_sync(node2.title, k=3)
+        Retrieval->>VS: search_sync(nodeN.title, k=3)
+        VS-->>Retrieval: docs1
+        VS-->>Retrieval: docs2
+        VS-->>Retrieval: docsN
     end
+
+    Retrieval-->>Graph: {context_docs: Dict[title: docs], error_message: None}
+
+    Graph->>Helper: Execute helper_populating_node
+
+    par Parallel Description Generation
+        Helper->>HA: invoke_agent(node1.title, docs1)
+        Helper->>HA: invoke_agent(node2.title, docs2)
+        Helper->>HA: invoke_agent(nodeN.title, docsN)
+        HA-->>Helper: HelperResponse1
+        HA-->>Helper: HelperResponse2
+        HA-->>Helper: HelperResponseN
+    end
+
+    Helper->>Helper: Build Nodes, Edges, IRSDiagramResponse
+    Helper-->>Graph: {final_diagram, error_message: None}
 
     Graph-->>User: Final State (dict)
 ```
@@ -598,29 +584,28 @@ classDiagram
     IRSDiagramResponse --> Edges : contains
 ```
 
-### Routing Logic
+### Graph Flow
+
+The graph uses a **simple linear flow** with direct edges between nodes:
 
 ```mermaid
-flowchart TD
-    Start([Node Execution]) --> Check{Check State}
+flowchart LR
+    Start([Entry Point]) --> Sketch[Diagram Sketch Node]
+    Sketch --> Retrieval[Retrieval Node]
+    Retrieval --> Helper[Helper Populating Node]
+    Helper --> End([END])
 
-    Check -->|error_message exists| End[END]
-    Check -->|No error| Next{Next Condition}
-
-    AfterSketch[After Diagram Sketch] --> Next1{diagram_skeleton?}
-    Next1 -->|Yes| Retrieval[Route to Retrieval]
-    Next1 -->|No| End
-
-    AfterRetrieval[After Retrieval] --> Next2{context_docs?}
-    Next2 -->|Yes| Helper[Route to Helper Populating]
-    Next2 -->|No| End
-
-    AfterHelper[After Helper Populating] --> End
-
-    style End fill:#F44336
+    style Start fill:#4CAF50
+    style End fill:#4CAF50
+    style Sketch fill:#2196F3
     style Retrieval fill:#FF9800
     style Helper fill:#9C27B0
 ```
+
+**Direct Edge Flow:**
+- No conditional routing logic - nodes execute sequentially
+- Error handling is managed within each node via `error_message` in state
+- Simple, predictable execution path
 
 ### Mermaid Parsing Module
 
@@ -691,24 +676,24 @@ filepath = save_mermaid_to_file(mermaid_diagram, diagram_title="My Diagram")
 
 1. **State Management**: LangGraph outputs dictionaries even when initialized with Pydantic BaseModel. All nodes handle both dict and object access patterns.
 
-2. **Embedding Model**: The application uses Amazon Titan Embeddings v2 (`amazon.titan-embed-text-v2:0`) for all vector operations:
-   - 1024-dimensional embeddings optimized for production workloads
-   - Cloud-based API calls via AWS Bedrock (no local model files)
-   - Parallel batch processing with ThreadPoolExecutor for efficient embedding generation
+2. **Embedding Model**: The application uses Google Generative AI Embeddings (`models/text-embedding-004`) for all vector operations:
+   - Cloud-based API calls via Google Generative AI (no local model files)
+   - Sequential batch processing for efficient embedding generation
    - Automatic retry and error handling for robust operation
+   - Synchronous search methods to avoid event loop issues
 
 3. **Parallel Execution**:
-   - Retrieval node uses `asyncio.gather` for parallel document searches
+   - Retrieval node uses `asyncio.gather` for parallel document searches (wrapped in executor for sync operations)
    - Helper populating node uses `loop.run_in_executor` for parallel agent calls
-   - Embedding generation uses ThreadPoolExecutor for concurrent API calls
+   - Search operations use sync methods wrapped in executors to avoid async event loop conflicts
 
-4. **Error Handling**: Each node returns `error_message` in state, and routing functions check for errors before proceeding.
+4. **Error Handling**: Each node manages errors internally via `error_message` in state. The graph uses direct edges for simple linear flow.
 
 5. **Agent Response Extraction**: Both orchestrator and helper agents extract `structured_response` from the agent's dictionary output (which contains both `messages` and `structured_response`).
 
-6. **Similarity Score Normalization**: FAISS distance scores are normalized to 0-1 similarity range using `1.0 / (1.0 + distance)`. This normalization works with Titan v2's 1024-dimensional embeddings.
+6. **Similarity Score Normalization**: FAISS distance scores are normalized to 0-1 similarity range using `1.0 / (1.0 + distance)`.
 
-7. **Chunking Strategy**: Documents are chunked with a minimum of 2048 tokens per chunk, optimized for Titan v2's embedding capabilities. Smaller chunks are automatically merged to meet the minimum requirement.
+7. **Chunking Strategy**: Documents are chunked using semantic chunking with an 80th percentile breakpoint. This creates semantically coherent chunks based on embedding similarity rather than fixed token sizes, preserving context and meaning better than token-based approaches.
 
 8. **Mermaid Diagram Generation**: The `helper_populating_node` automatically generates Mermaid flowchart syntax from `IRSDiagramResponse`, using different node shapes based on hierarchy levels and including descriptions in node labels. The diagram is automatically saved to a `.mmd` file in the `Docs/` directory with the file path stored in `GraphState.mermaid_filepath`.
 
@@ -758,17 +743,18 @@ diagram_maker/
 ### Scalability
 
 - **Stateless Application Design**: Enables horizontal scaling
-- **Cloud-Based Embeddings**: Amazon Titan Embeddings v2 scales automatically with demand, no local resource constraints
+- **Cloud-Based Embeddings**: Google Generative AI Embeddings scale automatically with demand, no local resource constraints
 - **S3 Lifecycle Policies**: Automatic archival and expiration
 - **Database Connection Pooling**: Optimized for concurrent requests
 - **CDN Integration**: CloudFront for global content delivery
-- **Parallel Processing**: Embedding generation and retrieval operations use parallel processing for optimal throughput
+- **Batch Processing**: Sequential batch processing for embedding generation with configurable batch sizes
 
 ### Security
 
 - **IAM Roles**: Least-privilege access patterns with instance profiles
   - EC2 instances use IAM roles instead of access keys
-  - Bedrock access limited to specific model ARNs (Titan Embeddings v2, Nova Lite/Pro)
+  - Bedrock access limited to specific model ARNs (Nova Lite/Pro for LLM operations)
+  - Google API key required for embedding operations (stored as environment variable)
   - S3 access scoped to knowledge base bucket only
   - CloudWatch logs access for monitoring
 - **EC2 Security Hardening**:
@@ -794,6 +780,7 @@ diagram_maker/
 - Terraform >= 1.0
 - AWS CLI configured
 - AWS account with appropriate permissions
+- Google API key (set as `GOOGLE_API_KEY` environment variable for embeddings)
 
 ### Local Development
 
