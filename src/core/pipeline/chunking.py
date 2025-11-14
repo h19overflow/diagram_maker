@@ -2,148 +2,126 @@
 
 from __future__ import annotations
 
-from typing import List
-
+import os
+from typing import List, Tuple
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_core.documents import Document
 from langchain_experimental.text_splitter import SemanticChunker
-from langchain_aws import BedrockEmbeddings
 from logging import getLogger
 from tqdm import tqdm
-import tiktoken
-
 from src.configs.rag_config import RAGConfig
 from src.core.pipeline.document_loader import load_document
+from dotenv import load_dotenv
 
+load_dotenv()
 logger = getLogger(__name__)
-
-
-def _count_tokens(text: str, encoding_name: str = "cl100k_base") -> int:
-    """Count tokens in text using tiktoken."""
-    try:
-        encoding = tiktoken.get_encoding(encoding_name)
-        return len(encoding.encode(text))
-    except Exception as e:
-        logger.warning(f"Error counting tokens with {encoding_name}, falling back to character-based estimate: {e}")
-        # Fallback: approximate 1 token = 4 characters
-        return len(text) // 4
-
-
 def _build_text_splitter(options: RAGConfig) -> SemanticChunker:
     """Build a SemanticChunker with Bedrock embeddings and 80th percentile breakpoint."""
-    embeddings = BedrockEmbeddings(
-        model_id=options.BEDROCK_EMBEDDING_MODEL_ID,
-        region_name=options.BEDROCK_REGION
+    embeddings = GoogleGenerativeAIEmbeddings(
+        google_api_key=os.getenv("GOOGLE_API_KEY"),
+        model="models/text-embedding-004",
     )
     return SemanticChunker(
         embeddings=embeddings,
         breakpoint_threshold_type="percentile",
-        breakpoint_threshold_amount=95.0  # 80th percentile
+        breakpoint_threshold_amount=80.0  # 80th percentile
     )
 
 
-def _merge_small_chunks(chunks: List[Document], min_tokens: int) -> List[Document]:
-    """Merge chunks that are below the minimum token size with adjacent chunks."""
-    if not chunks:
-        return chunks
+def _chunk_single_document(doc_info: Tuple[int, Document, RAGConfig]) -> Tuple[int, List[Document]]:
+    """Process a single document and return its chunks with the original index.
 
-    merged_chunks = []
-    i = 0
+    Args:
+        doc_info: Tuple of (index, document, config)
 
-    with tqdm(total=len(chunks), desc="Merging small chunks", unit="chunk", leave=False) as pbar:
-        while i < len(chunks):
-            current_chunk = chunks[i]
-            current_tokens = _count_tokens(current_chunk.page_content)
+    Returns:
+        Tuple of (index, list of chunk documents)
+    """
+    doc_idx, doc, config = doc_info
+    try:
+        # Create a separate splitter instance for this thread
+        splitter = _build_text_splitter(config)
 
-            # If chunk is already large enough, keep it as is
-            if current_tokens >= min_tokens:
-                merged_chunks.append(current_chunk)
-                i += 1
-                pbar.update(1)
-                continue
+        logger.debug(f"Processing document {doc_idx+1}: {len(doc.page_content)} characters")
+        chunks = splitter.split_text(doc.page_content)
 
-            # Otherwise, try to merge with next chunk(s)
-            merged_content = current_chunk.page_content
-            merged_metadata = current_chunk.metadata.copy()
-            merged_tokens = current_tokens
-            j = i + 1
-
-            # Merge with subsequent chunks until we reach minimum size or run out of chunks
-            while merged_tokens < min_tokens and j < len(chunks):
-                next_chunk = chunks[j]
-                next_tokens = _count_tokens(next_chunk.page_content)
-
-                # Merge content
-                merged_content += "\n\n" + next_chunk.page_content
-                merged_tokens += next_tokens
-
-                # Merge metadata (keep common keys, prefer first chunk's values)
-                for key, value in next_chunk.metadata.items():
-                    if key not in merged_metadata:
-                        merged_metadata[key] = value
-
-                j += 1
-
-            # Create merged document
-            merged_doc = Document(
-                page_content=merged_content,
-                metadata=merged_metadata
+        # Create Document objects with metadata
+        chunk_docs = []
+        for chunk in chunks:
+            chunk_doc = Document(
+                page_content=chunk,
+                metadata=doc.metadata.copy()
             )
-            merged_chunks.append(merged_doc)
+            chunk_docs.append(chunk_doc)
 
-            # Log if we had to merge
-            if j > i + 1:
-                logger.debug(f"Merged {j - i} chunks (total tokens: {merged_tokens})")
-
-            pbar.update(j - i)
-            i = j
-
-    return merged_chunks
+        logger.debug(f"Document {doc_idx+1} produced {len(chunk_docs)} chunks")
+        return doc_idx, chunk_docs
+    except Exception as e:
+        logger.error(f"Error processing document {doc_idx+1}: {e}")
+        raise
 
 
-def chunk_documents(documents: List[Document]) -> List[Document]:
+def chunk_documents(documents: List[Document], max_workers: int = 20) -> List[Document]:
     """Takes in a list of documents and chunks them into retrieval-ready chunks with metadata.
 
-    Ensures each chunk has a minimum number of tokens as specified in RAGConfig.MIN_CHUNK_SIZE.
+    Uses semantic chunking with 80th percentile breakpoint to create semantically coherent chunks.
+    Processes documents in parallel for improved performance.
+
+    Args:
+        documents: List of documents to chunk
+        max_workers: Maximum number of parallel workers (default: 4)
+
+    Returns:
+        List of chunked documents
     """
     try:
         config = RAGConfig()
-        splitter = _build_text_splitter(config)
 
         # Show progress while chunking documents
-        logger.info(f"Chunking {len(documents)} documents using semantic chunking (80th percentile breakpoint, min: {config.MIN_CHUNK_SIZE} tokens)")
+        logger.info(f"Chunking {len(documents)} documents using semantic chunking (80th percentile breakpoint)")
+        logger.info(f"Processing in parallel with {max_workers} workers...")
+
+        # Prepare document info tuples with indices for maintaining order
+        # Each thread will create its own splitter instance for thread safety
+        doc_infos = [(i, doc, config) for i, doc in enumerate(documents)]
+
+        # Process documents in parallel
+        all_chunks = [None] * len(documents)  # Pre-allocate to maintain order
+
         with tqdm(total=len(documents), desc="Chunking documents", unit="doc") as pbar:
-            split_docs = splitter.split_documents(documents)
-            pbar.update(len(documents))
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                # Submit all documents for parallel processing
+                future_to_doc = {
+                    executor.submit(_chunk_single_document, doc_info): doc_info[0]
+                    for doc_info in doc_infos
+                }
 
-        logger.info(f"Initial chunking produced {len(split_docs)} chunks")
+                # Collect results as they complete
+                for future in as_completed(future_to_doc):
+                    doc_idx = future_to_doc[future]
+                    try:
+                        idx, chunk_docs = future.result()
+                        all_chunks[idx] = chunk_docs
+                        pbar.update(1)
+                    except Exception as e:
+                        logger.error(f"Failed to process document {doc_idx+1}: {e}")
+                        raise
 
-        # Merge chunks that are too small
-        if config.MIN_CHUNK_SIZE > 0:
-            logger.info(f"Merging chunks below {config.MIN_CHUNK_SIZE} tokens...")
-            split_docs = _merge_small_chunks(split_docs, config.MIN_CHUNK_SIZE)
-            logger.info(f"After merging small chunks: {len(split_docs)} chunks")
+        # Flatten the list of chunk lists into a single list
+        flattened_chunks = []
+        for chunk_list in all_chunks:
+            if chunk_list:
+                flattened_chunks.extend(chunk_list)
 
-        # Verify minimum chunk size
-        small_chunks = []
-        for i, doc in enumerate(split_docs):
-            tokens = _count_tokens(doc.page_content)
-            if tokens < config.MIN_CHUNK_SIZE:
-                small_chunks.append((i, tokens))
-
-        if small_chunks:
-            logger.warning(f"Found {len(small_chunks)} chunks still below minimum size (likely end-of-document chunks)")
-            for idx, tokens in small_chunks[:5]:  # Show first 5
-                logger.debug(f"Chunk {idx}: {tokens} tokens")
-        else:
-            logger.info("All chunks meet minimum token requirement")
-
-        return split_docs
+        logger.info(f"Chunking produced {len(flattened_chunks)} total chunks from {len(documents)} documents")
+        return flattened_chunks
     except Exception as e:
         logger.error(f"Error chunking documents: {e}")
         raise e
 
 
 if __name__ == "__main__":
-    documents = load_document(r"C:\Users\User\Projects\hadith_scholar\data\QLORA.pdf")
+    documents = load_document(r"data\QLORA.pdf")
     chunked_docs = chunk_documents(documents)
     print(chunked_docs)
